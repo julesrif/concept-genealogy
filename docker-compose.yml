@@ -1,0 +1,30 @@
+# The design proposal specifies containerised environments as the target deployment.
+# Docker Compose provides reproducibility: any reviewer can spin up the exact same
+# PostgreSQL + pgvector version used during development with a single command.
+# The pgvector image ships PostgreSQL 16 with the pgvector
+# extension pre-installed, avoiding manual compilation.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    # pgvector/pgvector:pg16 = PostgreSQL 16 + pgvector extension pre-installed
+    # Source: https://github.com/pgvector/pgvector#docker
+    container_name: concept_genealogy_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: concept_genealogy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d concept_genealogy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    driver: local
