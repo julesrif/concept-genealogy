@@ -1,8 +1,9 @@
 const API_BASE = '/api'
 
-export async function startRun(concept, depth = null) {
+export async function startRun(concept, { depth = null, papersPerLevel = null } = {}) {
   const body = { concept }
   if (depth !== null) body.depth = depth
+  if (papersPerLevel !== null) body.papers_per_level = papersPerLevel
 
   const res = await fetch(`${API_BASE}/runs`, {
     method: 'POST',
@@ -59,5 +60,11 @@ export async function listOutputs() {
 export async function getOutput(filename) {
   const res = await fetch(`${API_BASE}/outputs/${filename}`)
   if (!res.ok) throw new Error(`Failed to get output: ${res.statusText}`)
+  return res.json()
+}
+
+export async function getGraph(runId) {
+  const res = await fetch(`${API_BASE}/runs/${runId}/graph`)
+  if (!res.ok) throw new Error(`Failed to get graph: ${res.statusText}`)
   return res.json()
 }

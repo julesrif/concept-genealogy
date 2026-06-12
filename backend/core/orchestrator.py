@@ -111,6 +111,7 @@ class Orchestrator:
         graph.add_node("retrieve", self._wrap_node(self._node_retrieve))
         graph.add_node("hitl_gate_1", self._wrap_node(self._node_hitl_gate_1))
         graph.add_node("trace_citation", self._wrap_node(self._node_trace_citation))
+        graph.add_node("hitl_graph_review", self._wrap_node(self._node_hitl_graph_review))
         graph.add_node("synthesise", self._wrap_node(self._node_synthesise))
         graph.add_node("hitl_gate_2", self._wrap_node(self._node_hitl_gate_2))
         graph.add_node("challenge", self._wrap_node(self._node_challenge))
@@ -134,6 +135,12 @@ class Orchestrator:
         graph.add_conditional_edges(
             "trace_citation",
             self._route_after_tracing,
+        )
+
+        # HITL Graph Review: approved → synthesise; rejected → fail
+        graph.add_conditional_edges(
+            "hitl_graph_review",
+            lambda state: "synthesise" if state.get("hitl_graph_approved") else END,
         )
 
         # After tracing completes → synthesise
@@ -161,17 +168,16 @@ class Orchestrator:
 
     def _route_after_tracing(self, state: dict) -> str:
         """
-        Routing logic for the recursive citation tracing loop.
+        Routing logic for the breadth-first citation tracing loop.
+
+        BFS strategy: at each depth level, trace up to `papers_per_level` papers.
+        When all papers at the current level are done, advance to the next depth
+        by collecting references from all papers just traced at this level.
 
         Three-constraint bounding scheme (design proposal Section 6):
-          1. Depth cap: current_depth >= max_depth → stop
-          2. No references left: nothing new to explore → stop
+          1. Depth cap: current_depth > max_depth → stop
+          2. No pending papers at current level and no new refs for next level → stop
           3. All references already visited → stop (prevents cycles in citation graph)
-
-        HARD CONSTRAINT: at least depth 1 must be reached. Concept genealogy
-        is impossible without tracing references from the seed paper - there is
-        no 100% original paper, so references always exist. If none are found,
-        the pipeline has failed (API error, rate-limit, etc.).
 
         Reference:
           Lecy and Beatty (2012) Representative literature reviews using
@@ -179,22 +185,42 @@ class Orchestrator:
         """
         current_depth = state.get("current_depth", 0)
         max_depth = state.get("max_depth", 3)
+        papers_per_level = state.get("papers_per_level", 3)
         visited = set(state.get("visited_paper_ids", []))
-
-        # Collect all reference IDs from the latest tracing result
+        pending = state.get("pending_papers_at_depth", [])
         tracing_results = state.get("tracing_results", [])
-        if tracing_results:
-            latest = tracing_results[-1]
-            unexplored = [
-                ref for ref in latest.get("references_explored", [])
-                if ref not in visited
-            ]
-        else:
-            unexplored = []
 
-        # Hard failure: if only the seed was traced and no references were found,
-        # there's no genealogy to build — fail rather than produce a shallow synthesis.
-        if current_depth <= 1 and not unexplored:
+        # If there are still papers queued at the current depth, keep tracing
+        if pending:
+            return "trace_citation"
+
+        # Current depth level is exhausted — try to advance to next depth
+        # Collect all unexplored references from papers traced at this depth level
+        next_depth = current_depth
+        all_refs_at_current_depth = []
+        for result in tracing_results:
+            if result.get("depth") == current_depth - 1:
+                # References discovered by papers at (current_depth - 1) form
+                # the pool for current_depth. But if current_depth was just
+                # completed, we need refs from papers at current_depth - 1.
+                pass
+
+        # Actually: papers traced at (current_depth - 1) have references that
+        # should be traced at current_depth. After the seed (depth 0) is traced,
+        # current_depth becomes 1. The seed's references form the depth-1 pool.
+        # After depth-1 papers are traced, their references form the depth-2 pool.
+
+        # Collect refs from papers traced at the most recent depth level
+        latest_depth = current_depth - 1  # last completed level
+        all_new_refs = []
+        for result in tracing_results:
+            if result.get("depth") == latest_depth:
+                for ref_id in result.get("references_explored", []):
+                    if ref_id not in visited and ref_id not in all_new_refs:
+                        all_new_refs.append(ref_id)
+
+        # Hard failure check: if we just did the seed and found nothing
+        if current_depth <= 1 and not all_new_refs:
             logger.error(
                 "No references found after tracing seed paper. "
                 "Cannot build concept genealogy without at least depth-1 references."
@@ -212,13 +238,20 @@ class Orchestrator:
             )
             return END
 
-        if current_depth >= max_depth or not unexplored:
+        # If we've reached the depth cap or no new refs, tracing is complete
+        if current_depth > max_depth or not all_new_refs:
             logger.info(
-                "Tracing complete. depth=%d/%d, unexplored_refs=%d",
-                current_depth, max_depth, len(unexplored)
+                "Tracing complete. depth=%d/%d, new_refs_available=%d",
+                current_depth - 1, max_depth, len(all_new_refs)
             )
-            return "synthesise"
+            return "hitl_graph_review"
 
+        # Populate the queue for the next depth level (up to papers_per_level)
+        state["pending_papers_at_depth"] = all_new_refs[:papers_per_level]
+        self._progress(
+            f"Advancing to depth {current_depth}: "
+            f"{min(len(all_new_refs), papers_per_level)} papers to trace"
+        )
         return "trace_citation"
 
     @staticmethod
@@ -268,7 +301,12 @@ class Orchestrator:
 
     def _node_trace_citation(self, state: PipelineState) -> PipelineState:
         """
-        One iteration of recursive citation tracing.
+        One iteration of breadth-first citation tracing.
+
+        BFS approach: at each depth level, trace multiple papers (up to
+        papers_per_level). The pending_papers_at_depth queue holds paper IDs
+        to process at the current depth. When the queue empties, the routing
+        function advances to the next depth level and refills the queue.
 
         The recursive tracing is implemented as repeated node activations
         (LangGraph loop) rather than a Python recursive function call. This
@@ -280,16 +318,18 @@ class Orchestrator:
         logger.info("Stage: TRACING depth=%d", state.current_depth)
         state.stage = PipelineStage.TRACING
 
-        # Determine which paper to trace at this depth
+        # Determine which paper to trace
         if state.current_depth == 0:
+            # First iteration: trace the seed paper
             target_paper = state.selected_seed
         else:
-            # Pick the highest-SJR unexplored reference from previous results
-            target_paper = self._select_next_paper(state)
+            # Pop next paper from BFS queue
+            target_paper = self._pop_next_paper(state)
 
         if target_paper is None:
             logger.warning("No target paper at depth %d - terminating trace", state.current_depth)
-            state.current_depth = state.max_depth  # force routing to synthesise
+            # Clear the queue to signal completion of this level
+            state.pending_papers_at_depth = []
             return state
 
         # Count articles traced at this depth for progress reporting
@@ -297,8 +337,8 @@ class Orchestrator:
             1 for r in state.tracing_results if r.depth == state.current_depth
         )
         self._progress(
-            f"Processing depth {state.current_depth}, "
-            f"Article {articles_at_depth + 1} — \"{target_paper.title}\""
+            f"Depth {state.current_depth}, "
+            f"Paper {articles_at_depth + 1} — \"{target_paper.title}\""
         )
 
         # Extractor → Evaluator → Inspector pipeline
@@ -310,13 +350,12 @@ class Orchestrator:
             evaluated_claims, target_paper, state.current_depth, state
         )
 
-        # Fetch the paper's references from Semantic Scholar to feed the
-        # recursive tracing loop.
+        # Fetch the paper's references from Semantic Scholar for the next level
         self._progress("Fetching references...")
         ref_ids = self.retriever.get_references(target_paper.paper_id)
         validated_result.references_explored = ref_ids
         self._progress(
-            f"Depth {state.current_depth} complete: "
+            f"Depth {state.current_depth} — "
             f"{len(validated_result.claims)} claims, {len(ref_ids)} references found"
         )
         logger.info(
@@ -326,13 +365,42 @@ class Orchestrator:
 
         state.tracing_results.append(validated_result)
         state.visited_paper_ids.add(target_paper.paper_id)
-        state.current_depth += 1
+
+        # If this was depth 0 (seed), advance depth counter immediately
+        # For deeper levels, depth advances when the queue is exhausted (in routing)
+        if state.current_depth == 0:
+            state.current_depth = 1
+        else:
+            # Remove processed paper from the pending queue
+            if target_paper.paper_id in state.pending_papers_at_depth:
+                state.pending_papers_at_depth.remove(target_paper.paper_id)
+            # If queue is now empty, advance depth for next level
+            if not state.pending_papers_at_depth:
+                state.current_depth += 1
+
+        return state
+
+    def _node_hitl_graph_review(self, state: PipelineState) -> PipelineState:
+        """HITL Graph Gate: present concept genealogy graph for approval before synthesis."""
+        state.stage = PipelineStage.AWAITING_GRAPH_APPROVAL
+
+        # Notify API layer that tracing is complete so graph data is available
+        tracing_cb = self.config.get("_tracing_complete_callback")
+        if tracing_cb:
+            tracing_cb(state.tracing_results, state.selected_seed)
+
+        self._progress("Tracing complete. Review the genealogy graph.")
+        approved = self.hitl.gate_graph_review()
+        state.hitl_graph_approved = approved
+        if not approved:
+            self._progress("Graph rejected. Pipeline stopped.", "WARNING")
         return state
 
     def _node_synthesise(self, state: PipelineState) -> PipelineState:
         """Activate Synthesiser to produce grounded summary from all traced claims."""
         logger.info("Stage: SYNTHESISING across %d tracing results", len(state.tracing_results))
         state.stage = PipelineStage.SYNTHESISING
+
         total_claims = sum(len(r.claims) for r in state.tracing_results)
         self._progress(
             f"Synthesising genealogy from {total_claims} claims "
@@ -382,9 +450,9 @@ class Orchestrator:
         logger.info("Pipeline complete. Output at: %s", output_path)
         return state
 
-    def _select_next_paper(self, state: PipelineState) -> "CandidatePaper | None":
+    def _pop_next_paper(self, state: PipelineState) -> "CandidatePaper | None":
         """
-        Select the highest-SJR-ranked unexplored reference from the latest tracing result.
+        Pop the next paper from the BFS queue and fetch its full metadata.
 
         WHY SJR RANKING FOR SELECTION:
         SJR (SCImago Journal Rank) is a field-normalised impact metric that accounts
@@ -393,29 +461,34 @@ class Orchestrator:
         of the three-constraint bounding scheme, ensuring we follow the highest-quality
         citation chains first when the depth cap forces us to be selective.
         """
-        if not state.tracing_results:
+        if not state.pending_papers_at_depth:
             return None
 
-        latest_result = state.tracing_results[-1]
-        unexplored = [
-            ref_id for ref_id in latest_result.references_explored
-            if ref_id not in state.visited_paper_ids
-        ]
-
-        if not unexplored:
-            return None
-
-        # Fetch full metadata from Semantic Scholar so the CitationExtractor
-        # has access to open_access_url and abstract for claim extraction.
-        for ref_id in unexplored:
+        # Try each queued paper ID until we find one with fetchable metadata
+        for ref_id in list(state.pending_papers_at_depth):
+            if ref_id in state.visited_paper_ids:
+                state.pending_papers_at_depth.remove(ref_id)
+                continue
             paper = self.retriever.fetch_paper_by_id(ref_id)
             if paper is not None:
                 return paper
+            # Couldn't fetch — remove from queue and try next
+            state.pending_papers_at_depth.remove(ref_id)
 
         return None
 
     def run(self, user_concept: str) -> PipelineState:
         """Entry point: run the full pipeline for a user concept."""
-        initial_state = PipelineState(user_concept=user_concept)
-        final_state_dict = self.graph.invoke(initial_state.dict())
+        initial_state = PipelineState(
+            user_concept=user_concept,
+            max_depth=self.config.get("max_depth", 3),
+            papers_per_level=self.config.get("papers_per_level", 3),
+        )
+        # BFS tracing with fan-out needs more iterations than default 25:
+        # worst case = 1 seed + (max_depth * papers_per_level) traces + gates + synthesis
+        max_iterations = 10 + (initial_state.max_depth * initial_state.papers_per_level * 2)
+        final_state_dict = self.graph.invoke(
+            initial_state.dict(),
+            config={"recursion_limit": max_iterations},
+        )
         return PipelineState(**final_state_dict)

@@ -73,6 +73,26 @@
         </div>
       </div>
 
+      <!-- HITL Graph Gate: Review genealogy graph before synthesis -->
+      <div v-if="run.current_gate?.gate_type === 'graph_review'" class="card gate-card">
+        <h3>🌳 Graph Review: Concept Genealogy</h3>
+        <p class="gate-desc">
+          Review the traced concept genealogy graph below.
+          Gold = seed paper, purple = concept (only those with references), blue = reference papers.
+          Approve to proceed with synthesis, or reject to stop.
+        </p>
+        <GenealogyGraph v-if="graphData" :graphData="graphData" />
+        <p v-else class="graph-loading">Loading graph data...</p>
+        <div class="gate-actions">
+          <button class="btn btn-success" :disabled="responding || !graphData" @click="approveGate">
+            ✓ Approve Graph
+          </button>
+          <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
+            ✗ Reject (Stop Pipeline)
+          </button>
+        </div>
+      </div>
+
       <!-- HITL Gate 2: Synthesis Approval -->
       <div v-if="run.current_gate?.gate_type === 'synthesis_approval'" class="card gate-card">
         <h3>📝 Gate 2: Review Synthesis</h3>
@@ -160,7 +180,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { getRun, respondToGate, getLogs } from '../api.js'
+import { getRun, respondToGate, getLogs, getGraph } from '../api.js'
+import GenealogyGraph from '../components/GenealogyGraph.vue'
 
 const props = defineProps({ runId: String })
 const router = useRouter()
@@ -170,13 +191,16 @@ const logs = ref([])
 const selectedIdx = ref(null)
 const responding = ref(false)
 const logContainer = ref(null)
+const graphData = ref(null)
 let pollInterval = null
 let logOffset = 0
+let graphFetched = false
 
 const stages = [
   { key: 'retrieving', label: 'Retrieving' },
   { key: 'awaiting_seed_approval', label: 'Seed Selection' },
   { key: 'tracing', label: 'Tracing Citations' },
+  { key: 'awaiting_graph_approval', label: 'Graph Review' },
   { key: 'synthesising', label: 'Synthesising' },
   { key: 'awaiting_synthesis_approval', label: 'Synthesis Review' },
   { key: 'challenging', label: 'Challenger Review' },
@@ -205,6 +229,12 @@ function statusClass(status) {
 async function fetchRun() {
   try {
     run.value = await getRun(props.runId)
+
+    // Fetch graph when the graph review gate is active
+    if (!graphFetched && run.value.current_gate?.gate_type === 'graph_review') {
+      fetchGraph()
+    }
+
     if (run.value.status === 'completed' || run.value.status === 'failed') {
       // Fetch final logs then stop polling
       await fetchLogs()
@@ -212,6 +242,18 @@ async function fetchRun() {
     }
   } catch {
     // retry on next poll
+  }
+}
+
+async function fetchGraph() {
+  try {
+    const data = await getGraph(props.runId)
+    if (data.nodes && data.nodes.length > 0) {
+      graphData.value = data
+      graphFetched = true
+    }
+  } catch {
+    // graph not ready yet, will retry on next poll
   }
 }
 
@@ -610,5 +652,12 @@ onUnmounted(() => {
 
 .log-entry.log-debug .log-level {
   color: #a78bfa;
+}
+
+.graph-loading {
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: 2rem;
+  font-style: italic;
 }
 </style>

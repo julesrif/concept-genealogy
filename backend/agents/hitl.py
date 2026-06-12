@@ -139,6 +139,22 @@ class HITLGate:
 
         return self._prompt_approve_reject("Gate 2 synthesis")
 
+    def gate_graph_review(self) -> bool:
+        """
+        Graph Gate: present concept genealogy graph for user review.
+
+        Returns True if approved (proceed to synthesis), False if rejected (stop pipeline).
+        """
+        print("\n" + "=" * 60)
+        print("HITL GRAPH GATE - Concept Genealogy Graph Review")
+        print("=" * 60)
+        print("\nThe concept genealogy graph has been built from tracing results.")
+        print("Review the graph in the web interface.")
+        print("\n" + "-" * 60)
+        print("Options: [a]pprove (proceed to synthesis) | [r]eject (stop pipeline) | [q]uit\n")
+
+        return self._prompt_approve_reject("Graph review")
+
     def gate_3_final_approval(
         self,
         synthesis_text: str | None,

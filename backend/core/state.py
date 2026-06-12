@@ -32,6 +32,7 @@ class PipelineStage(str, Enum):
     RETRIEVING = "retrieving"
     AWAITING_SEED_APPROVAL = "awaiting_seed_approval"
     TRACING = "tracing"
+    AWAITING_GRAPH_APPROVAL = "awaiting_graph_approval"
     SYNTHESISING = "synthesising"
     AWAITING_SYNTHESIS_APPROVAL = "awaiting_synthesis_approval"
     CHALLENGING = "challenging"
@@ -134,8 +135,11 @@ class PipelineState(BaseModel):
     # ── Recursive tracing ─────────────────────────────────────────────────────
     current_depth: int = 0
     max_depth: int = 3          # bounding scheme: depth cap (proposal Section 6)
+    papers_per_level: int = 3   # max papers to trace at each depth level (fan-out)
     visited_paper_ids: set[str] = Field(default_factory=set)
     tracing_results: list[TracingResult] = Field(default_factory=list)
+    # BFS queue: paper IDs to trace at the current depth level
+    pending_papers_at_depth: list[str] = Field(default_factory=list)
 
     # ── Synthesis ─────────────────────────────────────────────────────────────
     synthesis_text: Optional[str] = None
@@ -148,11 +152,13 @@ class PipelineState(BaseModel):
     max_synthesiser_retries: int = 3  # design constraint: max 3 for Synthesiser/Challenger
 
     # ── HITL gate flags ───────────────────────────────────────────────────────
-    # Three mandatory gates (design proposal Section 5):
+    # Four mandatory gates:
     #   Gate 1: seed selection approval
+    #   Gate G: graph approval (before synthesis)
     #   Gate 2: synthesis approval
     #   Gate 3: final output approval
     hitl_gate_1_approved: bool = False
+    hitl_graph_approved: bool = False
     hitl_gate_2_approved: bool = False
     hitl_gate_3_approved: bool = False
 

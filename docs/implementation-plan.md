@@ -33,3 +33,6 @@ PowerPoint deck - 10 slides max, covers all grading criteria pres
 Audio transcript - narration script aligned to slides pres
 Final GitHub push: clean history, no .env committed, requirements.txt pinned doc
 
+
+# Out of scope 
+Open Education API 6.0 for Non OpenAccess papers

@@ -33,6 +33,18 @@
           :disabled="loading"
         />
       </div>
+      <div class="form-group">
+        <label for="papers-per-level">Papers per Level (optional)</label>
+        <input
+          id="papers-per-level"
+          v-model.number="papersPerLevel"
+          type="number"
+          min="1"
+          max="10"
+          placeholder="Default: 3"
+          :disabled="loading"
+        />
+      </div>
       <button type="submit" class="btn btn-primary" :disabled="loading || !concept.trim()">
         {{ loading ? 'Starting...' : 'Start Tracing' }}
       </button>
@@ -70,6 +82,7 @@ import { startRun, listRuns } from '../api.js'
 const router = useRouter()
 const concept = ref('')
 const depth = ref(null)
+const papersPerLevel = ref(null)
 const loading = ref(false)
 const error = ref('')
 const recentRuns = ref([])
@@ -79,7 +92,10 @@ async function handleSubmit() {
   loading.value = true
   error.value = ''
   try {
-    const run = await startRun(concept.value.trim(), depth.value || null)
+    const run = await startRun(concept.value.trim(), {
+      depth: depth.value || null,
+      papersPerLevel: papersPerLevel.value || null,
+    })
     router.push({ name: 'run', params: { runId: run.run_id } })
   } catch (e) {
     error.value = e.message
