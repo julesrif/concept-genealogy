@@ -58,8 +58,21 @@ class Orchestrator:
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
+        self._progress = config.get("_progress_callback", lambda msg, level="INFO": None)
+        self._init_shared_groq_client()
         self._build_agents()
         self.graph = self._build_graph()
+
+    def _init_shared_groq_client(self) -> None:
+        """Create a single rate-limited Groq client shared by all agents."""
+        from core.groq_client import RateLimitedGroqClient
+        api_key = self.config.get("groq_api_key", "")
+        if api_key:
+            self.config["_groq_client"] = RateLimitedGroqClient(
+                api_key, progress_callback=self._progress
+            )
+        else:
+            self.config["_groq_client"] = None
 
     def _build_agents(self) -> None:
         """Instantiate all agents with shared config.
@@ -155,8 +168,10 @@ class Orchestrator:
           2. No references left: nothing new to explore → stop
           3. All references already visited → stop (prevents cycles in citation graph)
 
-        This draws on constrained snowball sampling (Lecy and Beatty, 2012) to
-        maintain computational tractability against the Semantic Scholar API.
+        HARD CONSTRAINT: at least depth 1 must be reached. Concept genealogy
+        is impossible without tracing references from the seed paper - there is
+        no 100% original paper, so references always exist. If none are found,
+        the pipeline has failed (API error, rate-limit, etc.).
 
         Reference:
           Lecy and Beatty (2012) Representative literature reviews using
@@ -176,6 +191,26 @@ class Orchestrator:
             ]
         else:
             unexplored = []
+
+        # Hard failure: if only the seed was traced and no references were found,
+        # there's no genealogy to build — fail rather than produce a shallow synthesis.
+        if current_depth <= 1 and not unexplored:
+            logger.error(
+                "No references found after tracing seed paper. "
+                "Cannot build concept genealogy without at least depth-1 references."
+            )
+            self._progress(
+                "No references found for the seed paper. "
+                "Try a different seed paper or concept.",
+                "ERROR"
+            )
+            state["stage"] = PipelineStage.FAILED.value
+            state["error_message"] = (
+                "No references found for the seed paper in Semantic Scholar. "
+                "Concept genealogy requires at least first-order references. "
+                "Try a different seed paper or concept query."
+            )
+            return END
 
         if current_depth >= max_depth or not unexplored:
             logger.info(
@@ -213,10 +248,12 @@ class Orchestrator:
         """Activate Retriever agent to fetch top-3 candidate seed papers."""
         logger.info("Stage: RETRIEVING for concept='%s'", state.user_concept)
         state.stage = PipelineStage.RETRIEVING
+        self._progress("Searching for seed papers...")
         candidates = self.retriever.run(state.user_concept)
         # Inspector validates structural output before it enters state
         validated = self.inspector.validate_candidates(candidates, state)
         state.candidate_papers = validated
+        self._progress(f"Found {len(validated)} candidate papers. Please select a seed.")
         state.stage = PipelineStage.AWAITING_SEED_APPROVAL
         return state
 
@@ -255,11 +292,36 @@ class Orchestrator:
             state.current_depth = state.max_depth  # force routing to synthesise
             return state
 
+        # Count articles traced at this depth for progress reporting
+        articles_at_depth = sum(
+            1 for r in state.tracing_results if r.depth == state.current_depth
+        )
+        self._progress(
+            f"Processing depth {state.current_depth}, "
+            f"Article {articles_at_depth + 1} — \"{target_paper.title}\""
+        )
+
         # Extractor → Evaluator → Inspector pipeline
+        self._progress("Extracting claims from paper...")
         raw_claims = self.extractor.run(target_paper, state.current_depth)
+        self._progress(f"Evaluating {len(raw_claims)} extracted claims...")
         evaluated_claims = self.evaluator.run(raw_claims, state)
         validated_result = self.inspector.validate_tracing_result(
             evaluated_claims, target_paper, state.current_depth, state
+        )
+
+        # Fetch the paper's references from Semantic Scholar to feed the
+        # recursive tracing loop.
+        self._progress("Fetching references...")
+        ref_ids = self.retriever.get_references(target_paper.paper_id)
+        validated_result.references_explored = ref_ids
+        self._progress(
+            f"Depth {state.current_depth} complete: "
+            f"{len(validated_result.claims)} claims, {len(ref_ids)} references found"
+        )
+        logger.info(
+            "Depth %d complete: %d claims extracted, %d references found",
+            state.current_depth, len(validated_result.claims), len(ref_ids)
         )
 
         state.tracing_results.append(validated_result)
@@ -271,9 +333,15 @@ class Orchestrator:
         """Activate Synthesiser to produce grounded summary from all traced claims."""
         logger.info("Stage: SYNTHESISING across %d tracing results", len(state.tracing_results))
         state.stage = PipelineStage.SYNTHESISING
+        total_claims = sum(len(r.claims) for r in state.tracing_results)
+        self._progress(
+            f"Synthesising genealogy from {total_claims} claims "
+            f"across {len(state.tracing_results)} papers..."
+        )
         synthesis = self.synthesiser.run(state.tracing_results, state.user_concept)
         validated = self.inspector.validate_synthesis(synthesis, state)
         state.synthesis_text = validated
+        self._progress("Synthesis ready for review.")
         state.stage = PipelineStage.AWAITING_SYNTHESIS_APPROVAL
         return state
 
@@ -288,8 +356,10 @@ class Orchestrator:
     def _node_challenge(self, state: PipelineState) -> PipelineState:
         """Activate Challenger to interrogate synthesis (adversarial review)."""
         state.stage = PipelineStage.CHALLENGING
+        self._progress("Running adversarial review on synthesis...")
         critique = self.challenger.run(state.synthesis_text, state.tracing_results)
         state.challenger_critique = critique
+        self._progress("Challenge complete. Final review ready.")
         state.stage = PipelineStage.AWAITING_FINAL_APPROVAL
         return state
 
@@ -304,9 +374,11 @@ class Orchestrator:
     def _node_persist(self, state: PipelineState) -> PipelineState:
         """Write final output to PostgreSQL + JSON/Markdown files."""
         state.stage = PipelineStage.PERSISTING
+        self._progress("Saving results...")
         output_path = self.persistence.save(state)
         state.output_path = output_path
         state.stage = PipelineStage.DONE
+        self._progress("Pipeline complete!")
         logger.info("Pipeline complete. Output at: %s", output_path)
         return state
 
@@ -321,8 +393,6 @@ class Orchestrator:
         of the three-constraint bounding scheme, ensuring we follow the highest-quality
         citation chains first when the depth cap forces us to be selective.
         """
-        from core.state import CandidatePaper
-
         if not state.tracing_results:
             return None
 
@@ -335,15 +405,14 @@ class Orchestrator:
         if not unexplored:
             return None
 
-        # For now, return first unexplored - Retriever will rank by SJR when fetching
-        # full metadata. This is a deliberate simplification for the MVP sprint;
-        # full SJR-ranked selection would require a separate Retriever call per ref.
-        next_id = unexplored[0]
-        return CandidatePaper(
-            paper_id=next_id,
-            title="(to be fetched)",
-            authors=[],
-        )
+        # Fetch full metadata from Semantic Scholar so the CitationExtractor
+        # has access to open_access_url and abstract for claim extraction.
+        for ref_id in unexplored:
+            paper = self.retriever.fetch_paper_by_id(ref_id)
+            if paper is not None:
+                return paper
+
+        return None
 
     def run(self, user_concept: str) -> PipelineState:
         """Entry point: run the full pipeline for a user concept."""

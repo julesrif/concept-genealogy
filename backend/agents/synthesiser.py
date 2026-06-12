@@ -82,15 +82,7 @@ class SynthesiserAgent:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.model = config.get("groq_model_reasoning", "llama-3.3-70b-versatile")
-        self._init_groq_client()
-
-    def _init_groq_client(self) -> None:
-        try:
-            from groq import Groq
-            self.groq = Groq(api_key=self.config.get("groq_api_key", ""))
-        except ImportError:
-            logger.error("groq package not installed")
-            self.groq = None
+        self.groq = config.get("_groq_client")  # shared rate-limited client
 
     def run(
         self,
@@ -142,15 +134,10 @@ class SynthesiserAgent:
         )
 
         try:
-            response = self.groq.chat.completions.create(
+            response = self.groq.chat_completion(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                # WHY temperature=0.3 (not 0):
-                # Unlike extraction (where determinism is critical for validation),
-                # synthesis benefits from slight variation in phrasing to produce
-                # natural academic prose. 0.3 introduces minimal variance while
-                # keeping the output grounded and coherent.
                 max_tokens=1500,
             )
             synthesis = response.choices[0].message.content

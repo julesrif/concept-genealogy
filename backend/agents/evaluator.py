@@ -82,16 +82,8 @@ class EvaluatorAgent:
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.model = config.get("groq_model_fast", "llama-3.1-8b-instant")
-        self._init_groq_client()
+        self.groq = config.get("_groq_client")  # shared rate-limited client
         self._init_embedding_model()
-
-    def _init_groq_client(self) -> None:
-        try:
-            from groq import Groq
-            self.groq = Groq(api_key=self.config.get("groq_api_key", ""))
-        except ImportError:
-            logger.error("groq package not installed")
-            self.groq = None
 
     def _init_embedding_model(self) -> None:
         """
@@ -137,8 +129,10 @@ class EvaluatorAgent:
         if not raw_claims:
             return []
 
+        total = len(raw_claims)
         evaluated: list[EvaluatedClaim] = []
-        for claim in raw_claims:
+        for idx, claim in enumerate(raw_claims, 1):
+            logger.debug("Evaluating claim %d/%d", idx, total)
             result = self._evaluate_claim(claim, state.user_concept, state.current_depth)
             if result is not None:
                 evaluated.append(result)
@@ -182,7 +176,7 @@ class EvaluatorAgent:
             import json as _json
             from agents.inspector import InspectorAgent
 
-            response = self.groq.chat.completions.create(
+            response = self.groq.chat_completion(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,

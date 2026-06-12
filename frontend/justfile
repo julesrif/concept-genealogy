@@ -1,0 +1,18 @@
+# Frontend justfile - Concept Genealogy UI
+set shell := ["powershell", "-NoProfile", "-Command"]
+
+# Run Vite dev server (proxies /api to localhost:8000)
+run:
+    npm run dev
+
+# Build for production
+build:
+    npm run build
+
+# Preview production build locally
+preview:
+    npm run preview
+
+# Install dependencies
+install:
+    npm install

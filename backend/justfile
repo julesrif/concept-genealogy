@@ -1,0 +1,26 @@
+# Backend justfile - Concept Genealogy API
+set shell := ["powershell", "-NoProfile", "-Command"]
+
+# Run FastAPI dev server with hot reload
+dev:
+    python -m uvicorn api:app --reload --port 8000
+
+# Run FastAPI production server
+serve:
+    python -m uvicorn api:app --host 0.0.0.0 --port 8000
+
+# Run CLI pipeline directly
+run concept *args:
+    python main.py "{{concept}}" {{args}}
+
+# Install dependencies
+install:
+    pip install -r requirements.txt
+
+# Run tests
+test:
+    pytest -v
+
+# Check syntax
+check:
+    python -c "import ast; import pathlib; [ast.parse(f.read_text()) for f in pathlib.Path('.').rglob('*.py')]"

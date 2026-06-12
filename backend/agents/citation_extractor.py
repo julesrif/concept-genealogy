@@ -82,30 +82,9 @@ class CitationExtractorAgent:
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
-        self._init_groq_client()
+        self.groq = config.get("_groq_client")  # shared rate-limited client
         self.model = config.get("groq_model_fast", "llama-3.1-8b-instant")
         self.max_text_chars = 8000  # ~2000 tokens; keeps within context window safely
-
-    def _init_groq_client(self) -> None:
-        """
-        Initialise Groq client.
-
-        WHY GROQ (NOT OPENAI OR LOCAL):
-        Groq's LPU architecture ensures low-latency, deterministic execution
-        vital for agent coordination (Groq, 2025a). The free tier is sufficient
-        for academic-scale usage. Importantly, Groq's terms permit academic
-        research use (Groq, 2025b).
-
-        References:
-          Groq (2025a) Rate limits. https://console.groq.com/docs/rate-limits
-          Groq (2025b) Acceptable use and responsible AI policy.
-        """
-        try:
-            from groq import Groq
-            self.groq = Groq(api_key=self.config.get("groq_api_key", ""))
-        except ImportError:
-            logger.error("groq package not installed. Run: pip install groq")
-            self.groq = None
 
     def run(self, paper: CandidatePaper, depth: int) -> list[ExtractedClaim]:
         """
@@ -207,7 +186,7 @@ class CitationExtractorAgent:
         )
 
         try:
-            response = self.groq.chat.completions.create(
+            response = self.groq.chat_completion(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,

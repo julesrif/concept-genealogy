@@ -1,4 +1,4 @@
-# Dockerfile - concept-tracer backend
+# Dockerfile - concept-tracer backend (FastAPI)
 #
 # WHY PYTHON 3.12-SLIM (NOT FULL):
 # The slim image omits documentation, locale files, and non-essential OS packages,
@@ -31,7 +31,7 @@ WORKDIR /app
 # Copy requirements first - Docker layer cache means this layer is only
 # rebuilt when requirements.txt changes, not on every source code change.
 # This is standard Docker best practice for Python projects.
-COPY requirements.txt .
+COPY backend/requirements.txt .
 
 # Install Python dependencies
 # --no-cache-dir: reduces image size (pip cache not useful in a container layer)
@@ -39,11 +39,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source
-COPY . .
+COPY backend/ .
 
 # Create output directory (mapped to host volume in docker-compose)
 RUN mkdir -p output data
 
-# Default command: show help if no concept is provided
-# Override at runtime: docker run ... python main.py "attention mechanism"
-CMD ["python", "main.py", "--help"]
+EXPOSE 8000
+
+# Run FastAPI via uvicorn
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
