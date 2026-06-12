@@ -1,0 +1,188 @@
+{
+  "run_id": "run_20260612_124546_4e0997",
+  "user_concept": "attention mechanism",
+  "seed_paper": {
+    "paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+    "title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+    "authors": [
+      "Yude Wang",
+      "Jie Zhang",
+      "Meina Kan",
+      "S. Shan",
+      "Xilin Chen"
+    ],
+    "year": 2020,
+    "citation_count": 764,
+    "sjr_score": null,
+    "open_access_url": "https://arxiv.org/pdf/2004.04581",
+    "abstract": "Image-level weakly supervised semantic segmentation is a challenging problem that has been deeply studied in recent years. Most of advanced solutions exploit class activation map (CAM). However, CAMs can hardly serve as the object mask due to the gap between full and weak supervisions. In this paper, we propose a self-supervised equivariant attention mechanism (SEAM) to discover additional supervision and narrow the gap. Our method is based on the observation that equivariance is an implicit constraint in fully supervised semantic segmentation, whose pixel-level labels take the same spatial transformation as the input images during data augmentation. However, this constraint is lost on the CAMs trained by image-level supervision. Therefore, we propose consistency regularization on predicted CAMs from various transformed images to provide self-supervision for network learning. Moreover, we propose a pixel correlation module (PCM), which exploits context appearance information and refines the prediction of current pixel by its similar neighbors, leading to further improvement on CAMs consistency. Extensive experiments on PASCAL VOC 2012 dataset demonstrate our method outperforms state-of-the-art methods using the same level of supervision. The code is released online."
+  },
+  "tracing_results": [
+    {
+      "paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+      "paper_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+      "depth": 0,
+      "claims": [
+        {
+          "claim_text": "Most of advanced solutions exploit class activation map (CAM).",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "class activation map",
+            "attention mechanism"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "However, CAMs can hardly serve as the object mask due to the gap between full and weak supervisions.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "object mask",
+            "supervision types (full and weak)"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "We propose a self-supervised equivariant attention mechanism (SEAM) to discover additional supervision and narrow the gap.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "self-supervised learning",
+            "equivariant attention mechanism",
+            "additional supervision"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "Our method is based on the observation that equivariance is an implicit constraint in fully supervised semantic segmentation.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "equivariance",
+            "fully supervised semantic segmentation"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "However, this constraint is lost on the CAMs trained by image-level supervision.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "CAMs",
+            "image-level supervision",
+            "attention mechanism"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "We propose consistency regularization on predicted CAMs from various transformed images to provide self-supervision for network learning.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "self-supervision",
+            "network learning",
+            "attention mechanism",
+            "consistency regularization",
+            "CAMs (Class Activation Maps)"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "The SEAM is implemented by a siamese network with equivariant cross regularization (ECR) loss, which regularizes the original CAMs and the revised CAMs on different branches.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "attention mechanism",
+            "SEAM",
+            "siamese network",
+            "equivariant cross regularization (ECR) loss",
+            "class activation maps (CAMs)"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "Our CAMs are consistent over various transformed input images, with fewer over-activated and under-activated regions than baseline.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "consistency",
+            "attention mechanism",
+            "transformed input images",
+            "over-activation",
+            "under-activation"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "Experiments on PASCAL VOC 2012 illustrate that our algorithm achieves state-of-the-art performance with only image-level annotations.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "image-level annotations",
+            "attention mechanism",
+            "state-of-the-art performance",
+            "PASCAL VOC 2012"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "Most of advanced WSSS methods are based on the class activation map (CAM), which is an effective way to localize objects by image classification labels.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "class activation map (CAM)",
+            "object localization",
+            "image classification labels"
+          ],
+          "drift_score": null
+        },
+        {
+          "claim_text": "However, the CAMs usually only cover the most discriminative part of the object and incorrectly activate in background regions.",
+          "source_paper_id": "90d668b9ff44af25fbe84f888e3c29ec7d86d95a",
+          "source_title": "Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation",
+          "depth": 0,
+          "validity_score": 0.8,
+          "relevant_concepts": [
+            "CAMs",
+            "attention mechanism",
+            "object detection",
+            "background regions"
+          ],
+          "drift_score": null
+        }
+      ]
+    }
+  ],
+  "synthesis": "The concept of an attention mechanism is introduced in the context of weakly supervised semantic segmentation, as proposed in the seed paper \"Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation\" [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. The authors note that most advanced solutions exploit class activation maps (CAMs), but these can hardly serve as object masks due to the gap between full and weak supervisions [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. To address this, the authors propose a self-supervised equivariant attention mechanism (SEAM) to discover additional supervision and narrow the gap [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0].\n\nThe SEAM is based on the observation that equivariance is an implicit constraint in fully supervised semantic segmentation, but this constraint is lost on CAMs trained by image-level supervision [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. The authors propose consistency regularization on predicted CAMs from various transformed images to provide self-supervision for network learning [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. This is implemented by a siamese network with equivariant cross regularization (ECR) loss, which regularizes the original CAMs and the revised CAMs on different branches [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0].\n\nUnfortunately, there are no claims provided at depth 1 or beyond, which limits our ability to trace the evolution of the concept of attention mechanism in cited works. Therefore, we cannot identify any conceptual drift or developments in the concept beyond the seed paper. The available claims only support the introduction of the SEAM concept and its implementation in the context of weakly supervised semantic segmentation.\n\nThe experiments on PASCAL VOC 2012 illustrate that the proposed algorithm achieves state-of-the-art performance with only image-level annotations [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. The authors also note that most advanced weakly supervised semantic segmentation (WSSS) methods are based on the class activation map (CAM), which is an effective way to localize objects by image classification labels [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. However, the CAMs usually only cover the most discriminative part of the object and incorrectly activate in background regions [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0].\n\nIn conclusion, the concept of attention mechanism, as introduced in the seed paper, is specifically designed to address the limitations of CAMs in weakly supervised semantic segmentation [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. The proposed SEAM provides a self-supervised approach to discover additional supervision and improve the performance of WSSS methods [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. However, due to the limited number of claims provided, we cannot provide a more comprehensive genealogy of the concept of attention mechanism.\n\nIn summary, the available claims support the introduction of the SEAM concept and its implementation in the context of weakly supervised semantic segmentation [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. The claims highlight the limitations of CAMs and the potential of the SEAM to improve the performance of WSSS methods [Source: Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation, depth=0]. However, further claims are needed to provide a more complete understanding of the concept of attention mechanism and its evolution in the field.",
+  "challenger_critique": "## Challenger Review (MVP Stub)\n\n**Note:** Full adversarial debate is deferred to a future implementation sprint (see `agents/challenger.py` for rationale). The synthesis has been passed to HITL Gate 3 without automated adversarial review.\n\n**Coverage summary:**\n- Claims reviewed: 11\n- Depth levels covered: [0]\n- Papers traced: 1\n\n**Recommended manual review points:**\n- Verify that claims at depth > 1 have not drifted significantly from the seed concept\n- Check that all cited source titles in the synthesis match the traced paper list\n- Confirm no claims in the synthesis are unsupported by the extracted evidence\n\nHuman review via HITL Gate 3 is the primary quality control at this stage.",
+  "metadata": {
+    "max_depth": 3,
+    "actual_depth": 1,
+    "papers_visited": [
+      "90d668b9ff44af25fbe84f888e3c29ec7d86d95a"
+    ],
+    "inspector_retries": 0,
+    "synthesiser_retries": 0
+  }
+}

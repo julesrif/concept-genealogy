@@ -1,0 +1,125 @@
+09:38:16 | INFO    | __main__ | Starting Concept Genealogy for concept: 'attention mechanism'
+09:38:16 | INFO    | __main__ | Max depth: 5 | Model (fast): llama-3.1-8b-instant | Model (reasoning): llama-3.3-70b-versatile
+09:38:16 | WARNING | agents.retriever | SJR CSV not found at 'backend\data\scimagojr2025.csv'. Falling back to citation count ranking. Download from https://www.scimagojr.com/journalrank.php
+09:41:04 | INFO    | __main__ | Starting Concept Genealogy for concept: 'attention mechanism'
+09:41:04 | INFO    | __main__ | Max depth: 5 | Model (fast): llama-3.1-8b-instant | Model (reasoning): llama-3.3-70b-versatile
+09:41:16 | INFO    | sentence_transformers.SentenceTransformer | Use pytorch device_name: cpu
+09:41:16 | INFO    | sentence_transformers.SentenceTransformer | Load pretrained SentenceTransformer: all-mpnet-base-v2
+09:41:18 | WARNING | huggingface_hub.file_download | Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+09:41:28 | INFO    | agents.evaluator | Evaluator: embedding model loaded (all-mpnet-base-v2)
+09:41:28 | INFO    | agents.challenger | ChallengerAgent initialised (MVP stub - see docstring for deferral rationale)
+09:41:28 | INFO    | core.orchestrator | Stage: RETRIEVING for concept='attention mechanism'
+09:41:28 | INFO    | agents.retriever | Retriever: searching for concept='attention mechanism'
+09:41:30 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=attention+mechanism&fields=paperId%2Ctitle%2Cauthors%2Cyear%2CcitationCount%2CopenAccessPdf%2Cabstract%2CpublicationVenue%2CexternalIds&limit=20 "HTTP/1.1 200 OK"
+09:41:31 | INFO    | agents.retriever | Retriever: returning 10 candidates
+09:41:53 | INFO    | agents.hitl | HITL Gate 1: user selected paper 'A review on the attention mechanism of deep learning'
+09:41:53 | INFO    | core.orchestrator | Stage: TRACING depth=0
+09:41:53 | INFO    | agents.citation_extractor | CitationExtractor: processing paper 'A review on the attention mechanism of deep learning' (depth=0, oa=False)
+09:41:53 | INFO    | agents.citation_extractor | CitationExtractor: no OA PDF for 'A review on the attention mechanism of deep learning' - using abstract only
+09:41:53 | WARNING | agents.citation_extractor | CitationExtractor: no extractable text for paper 'A review on the attention mechanism of deep learning'
+09:41:53 | INFO    | core.orchestrator | Tracing complete. depth=1/3, unexplored_refs=0
+09:41:53 | INFO    | core.orchestrator | Stage: SYNTHESISING across 1 tracing results
+09:41:56 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+09:41:56 | INFO    | agents.synthesiser | Synthesiser: generated synthesis (2998 chars)
+10:08:32 | WARNING | agents.hitl | HITL Gate 2 synthesis: non-interactive mode - auto-approving
+10:08:32 | INFO    | agents.challenger | ChallengerAgent: stub critique generated (693 chars). Full adversarial debate deferred (see docstring).
+10:08:33 | WARNING | agents.hitl | HITL Gate 3 final output: non-interactive mode - auto-approving
+10:08:33 | INFO    | storage.persistence | Persistence: DB write successful for run_id=run_20260612_100833_4e0997
+10:08:33 | INFO    | storage.persistence | Persistence: output saved to output\run_20260612_100833_4e0997_attention_mechanism.md
+10:08:33 | INFO    | core.orchestrator | Pipeline complete. Output at: output\run_20260612_100833_4e0997_attention_mechanism.md
+10:09:16 | INFO    | __main__ | Starting Concept Genealogy for concept: 'attention mechanism'
+10:09:16 | INFO    | __main__ | Max depth: 5 | Model (fast): llama-3.1-8b-instant | Model (reasoning): llama-3.3-70b-versatile
+10:09:29 | INFO    | sentence_transformers.SentenceTransformer | Use pytorch device_name: cpu
+10:09:29 | INFO    | sentence_transformers.SentenceTransformer | Load pretrained SentenceTransformer: all-mpnet-base-v2
+10:09:31 | INFO    | agents.evaluator | Evaluator: embedding model loaded (all-mpnet-base-v2)
+10:09:32 | INFO    | agents.challenger | ChallengerAgent initialised (MVP stub - see docstring for deferral rationale)
+10:09:32 | INFO    | core.orchestrator | Stage: RETRIEVING for concept='attention mechanism'
+10:09:32 | INFO    | agents.retriever | Retriever: searching for concept='attention mechanism'
+10:09:33 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=attention+mechanism&fields=paperId%2Ctitle%2Cauthors%2Cyear%2CcitationCount%2CopenAccessPdf%2Cabstract%2CpublicationVenue%2CexternalIds&limit=20 "HTTP/1.1 429 "
+10:09:33 | ERROR   | agents.retriever | Semantic Scholar API error: {"message": "Too Many Requests. Please wait and try again or apply for a key for higher rate limits. https://www.semanticscholar.org/product/api#api-key-form", "code": "429"}
+10:09:33 | WARNING | agents.retriever | Retriever: no results from Semantic Scholar for 'attention mechanism'
+10:09:33 | ERROR   | agents.inspector | Inspector: all 0 candidates failed validation
+10:12:01 | WARNING | agents.hitl | HITL Gate 1: non-interactive mode — auto-selecting candidate[0]
+10:12:01 | INFO    | core.orchestrator | Stage: RETRIEVING for concept='attention mechanism'
+10:12:01 | INFO    | agents.retriever | Retriever: searching for concept='attention mechanism'
+12:38:03 | INFO    | __main__ | Starting Concept Genealogy for concept: 'attention mechanism'
+12:38:03 | INFO    | __main__ | Max depth: 2 | Model (fast): llama-3.1-8b-instant | Model (reasoning): llama-3.3-70b-versatile
+12:38:03 | WARNING | agents.retriever | SJR CSV not found at 'data\scimagojr2025.csv'. Falling back to citation count ranking. Download from https://www.scimagojr.com/journalrank.php
+12:38:16 | INFO    | sentence_transformers.SentenceTransformer | Use pytorch device_name: cpu
+12:38:16 | INFO    | sentence_transformers.SentenceTransformer | Load pretrained SentenceTransformer: all-mpnet-base-v2
+12:38:19 | INFO    | agents.evaluator | Evaluator: embedding model loaded (all-mpnet-base-v2)
+12:38:19 | INFO    | agents.challenger | ChallengerAgent initialised (MVP stub - see docstring for deferral rationale)
+12:38:19 | INFO    | core.orchestrator | Stage: RETRIEVING for concept='attention mechanism'
+12:38:19 | INFO    | agents.retriever | Retriever: searching for concept='attention mechanism'
+12:38:22 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=attention+mechanism&fields=paperId%2Ctitle%2Cauthors%2Cyear%2CcitationCount%2CopenAccessPdf%2Cabstract%2CpublicationVenue%2CexternalIds&limit=20 "HTTP/1.1 200 OK"
+12:38:22 | INFO    | agents.retriever | Retriever: returning 10 candidates
+12:39:32 | INFO    | agents.hitl | HITL Gate 1: user selected paper 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation'
+12:39:32 | INFO    | core.orchestrator | Stage: TRACING depth=0
+12:39:32 | INFO    | agents.citation_extractor | CitationExtractor: processing paper 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation' (depth=0, oa=True)
+12:39:33 | INFO    | httpx | HTTP Request: GET https://arxiv.org/pdf/2004.04581 "HTTP/1.1 200 OK"
+12:39:35 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:39:35 | ERROR   | agents.inspector | Inspector: JSON parse failure for paper unknown at depth 0: Extra data: line 5 column 4 (char 145)
+12:39:35 | INFO    | agents.citation_extractor | CitationExtractor: extracted 0 valid claims from 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation'
+12:39:35 | INFO    | core.orchestrator | Tracing complete. depth=1/3, unexplored_refs=0
+12:39:35 | INFO    | core.orchestrator | Stage: SYNTHESISING across 1 tracing results
+12:39:35 | ERROR   | agents.synthesiser | Synthesiser: 0 claims extracted across 1 tracing results — refusing to synthesise. Likely cause: no OA PDF and empty abstract.
+12:43:28 | WARNING | agents.hitl | HITL Gate 2 synthesis: non-interactive mode — auto-approving
+12:43:28 | INFO    | agents.challenger | ChallengerAgent: stub critique generated (693 chars). Full adversarial debate deferred (see docstring).
+12:43:28 | WARNING | agents.hitl | HITL Gate 3 final output: non-interactive mode — auto-approving
+12:43:28 | INFO    | storage.persistence | Persistence: DB write successful for run_id=run_20260612_124328_4e0997
+12:43:28 | INFO    | storage.persistence | Persistence: output saved to output\run_20260612_124328_4e0997_attention_mechanism.md
+12:43:28 | INFO    | core.orchestrator | Pipeline complete. Output at: output\run_20260612_124328_4e0997_attention_mechanism.md
+12:43:35 | INFO    | __main__ | Starting Concept Genealogy for concept: 'attention mechanism'
+12:43:35 | INFO    | __main__ | Max depth: 2 | Model (fast): llama-3.1-8b-instant | Model (reasoning): llama-3.3-70b-versatile
+12:43:47 | INFO    | sentence_transformers.SentenceTransformer | Use pytorch device_name: cpu
+12:43:47 | INFO    | sentence_transformers.SentenceTransformer | Load pretrained SentenceTransformer: all-mpnet-base-v2
+12:43:49 | INFO    | agents.evaluator | Evaluator: embedding model loaded (all-mpnet-base-v2)
+12:43:50 | INFO    | agents.challenger | ChallengerAgent initialised (MVP stub - see docstring for deferral rationale)
+12:43:50 | INFO    | core.orchestrator | Stage: RETRIEVING for concept='attention mechanism'
+12:43:50 | INFO    | agents.retriever | Retriever: searching for concept='attention mechanism'
+12:43:53 | INFO    | httpx | HTTP Request: GET https://api.semanticscholar.org/graph/v1/paper/search?query=attention+mechanism&fields=paperId%2Ctitle%2Cauthors%2Cyear%2CcitationCount%2CopenAccessPdf%2Cabstract%2CpublicationVenue%2CexternalIds&limit=20 "HTTP/1.1 200 OK"
+12:43:53 | INFO    | agents.retriever | Retriever: returning 10 candidates
+12:44:15 | INFO    | agents.hitl | HITL Gate 1: user selected paper 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation'
+12:44:15 | INFO    | core.orchestrator | Stage: TRACING depth=0
+12:44:15 | INFO    | agents.citation_extractor | CitationExtractor: processing paper 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation' (depth=0, oa=True)
+12:44:16 | INFO    | httpx | HTTP Request: GET https://arxiv.org/pdf/2004.04581 "HTTP/1.1 200 OK"
+12:44:17 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:17 | INFO    | agents.citation_extractor | CitationExtractor: extracted 11 valid claims from 'Self-Supervised Equivariant Attention Mechanism for Weakly Supervised Semantic Segmentation'
+12:44:17 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:17 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:17 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:17 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:18 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:18 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+12:44:20 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:20 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:20 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+12:44:22 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:22 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:22 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 1.000000 seconds
+12:44:23 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:23 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:23 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 3.000000 seconds
+12:44:27 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:27 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:27 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+12:44:29 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:29 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:29 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 1.000000 seconds
+12:44:30 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:30 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 1.000000 seconds
+12:44:31 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:31 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+12:44:31 | INFO    | groq._base_client | Retrying request to /openai/v1/chat/completions in 2.000000 seconds
+12:44:33 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:33 | INFO    | agents.evaluator | Evaluator: 11/11 claims passed relevance filter for concept='attention mechanism'
+12:44:33 | INFO    | core.orchestrator | Tracing complete. depth=1/3, unexplored_refs=0
+12:44:33 | INFO    | core.orchestrator | Stage: SYNTHESISING across 1 tracing results
+12:44:35 | INFO    | httpx | HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+12:44:35 | INFO    | agents.synthesiser | Synthesiser: generated synthesis (4334 chars)
+12:45:04 | INFO    | agents.hitl | HITL Gate 2 synthesis: approved
+12:45:04 | INFO    | agents.challenger | ChallengerAgent: stub critique generated (694 chars). Full adversarial debate deferred (see docstring).
+12:45:46 | INFO    | agents.hitl | HITL Gate 3 final output: approved
+12:45:46 | INFO    | storage.persistence | Persistence: DB write successful for run_id=run_20260612_124546_4e0997
+12:45:46 | INFO    | storage.persistence | Persistence: output saved to output\run_20260612_124546_4e0997_attention_mechanism.md
+12:45:46 | INFO    | core.orchestrator | Pipeline complete. Output at: output\run_20260612_124546_4e0997_attention_mechanism.md
