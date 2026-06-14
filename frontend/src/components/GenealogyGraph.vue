@@ -100,7 +100,7 @@ const configs = computed(() => ({
       <span class="legend-item"><span class="legend-dot seed"></span> Seed Paper</span>
       <span class="legend-item"><span class="legend-dot concept"></span> Concept</span>
       <span class="legend-item"><span class="legend-dot reference"></span> Reference Paper</span>
-      <span class="legend-flow">Flow: Seed → Concept → References</span>
+      <span class="legend-flow">Flow: Seed -> Concept -> References</span>
     </div>
     <v-network-graph
       class="genealogy-graph"

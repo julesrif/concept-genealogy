@@ -97,7 +97,7 @@ class Orchestrator:
 
         Node naming convention: snake_case, matches PipelineStage enum values
         where possible. This makes routing conditions readable as:
-            state.stage == PipelineStage.RETRIEVING → go to "retrieve"
+            state.stage == PipelineStage.RETRIEVING -> go to "retrieve"
 
         Conditional edge functions are defined as inner closures here rather
         than module-level functions so they close over `self` and can access
@@ -107,7 +107,7 @@ class Orchestrator:
         # at entry and reconstruct on exit. See _wrap_node() below.
         graph = StateGraph(dict)
 
-        # ── Nodes ─────────────────────────────────────────────────────────────
+        # Nodes
         graph.add_node("retrieve", self._wrap_node(self._node_retrieve))
         graph.add_node("hitl_gate_1", self._wrap_node(self._node_hitl_gate_1))
         graph.add_node("trace_citation", self._wrap_node(self._node_trace_citation))
@@ -118,14 +118,14 @@ class Orchestrator:
         graph.add_node("hitl_gate_3", self._wrap_node(self._node_hitl_gate_3))
         graph.add_node("persist", self._wrap_node(self._node_persist))
 
-        # ── Entry point ───────────────────────────────────────────────────────
+        # Entry point
         graph.set_entry_point("retrieve")
 
-        # ── Edges ─────────────────────────────────────────────────────────────
-        # After retrieval → HITL Gate 1 (mandatory: user must approve seed)
+        # Edges
+        # After retrieval -> HITL Gate 1 (mandatory: user must approve seed)
         graph.add_edge("retrieve", "hitl_gate_1")
 
-        # HITL Gate 1: approved → start tracing; rejected → re-retrieve
+        # HITL Gate 1: approved -> start tracing; rejected -> re-retrieve
         graph.add_conditional_edges(
             "hitl_gate_1",
             lambda state: "trace_citation" if state.get("hitl_gate_1_approved") else "retrieve",
@@ -137,31 +137,31 @@ class Orchestrator:
             self._route_after_tracing,
         )
 
-        # HITL Graph Review: approved → synthesise; rejected → fail
+        # HITL Graph Review: approved -> synthesise; rejected -> fail
         graph.add_conditional_edges(
             "hitl_graph_review",
             lambda state: "synthesise" if state.get("hitl_graph_approved") else END,
         )
 
-        # After tracing completes → synthesise
+        # After tracing completes -> synthesise
         graph.add_edge("synthesise", "hitl_gate_2")
 
-        # HITL Gate 2: approved → challenge; rejected → re-synthesise
+        # HITL Gate 2: approved -> challenge; rejected -> re-synthesise
         graph.add_conditional_edges(
             "hitl_gate_2",
             lambda state: "challenge" if state.get("hitl_gate_2_approved") else "synthesise",
         )
 
-        # Challenge → HITL Gate 3
+        # Challenge -> HITL Gate 3
         graph.add_edge("challenge", "hitl_gate_3")
 
-        # HITL Gate 3: approved → persist; rejected → re-synthesise (reset loop)
+        # HITL Gate 3: approved -> persist; rejected -> re-synthesise (reset loop)
         graph.add_conditional_edges(
             "hitl_gate_3",
             lambda state: "persist" if state.get("hitl_gate_3_approved") else "synthesise",
         )
 
-        # Persist → done
+        # Persist -> done
         graph.add_edge("persist", END)
 
         return graph.compile()
@@ -175,9 +175,9 @@ class Orchestrator:
         by collecting references from all papers just traced at this level.
 
         Three-constraint bounding scheme (design proposal Section 6):
-          1. Depth cap: current_depth > max_depth → stop
-          2. No pending papers at current level and no new refs for next level → stop
-          3. All references already visited → stop (prevents cycles in citation graph)
+          1. Depth cap: current_depth > max_depth -> stop
+          2. No pending papers at current level and no new refs for next level -> stop
+          3. All references already visited -> stop (prevents cycles in citation graph)
 
         Reference:
           Lecy and Beatty (2012) Representative literature reviews using
@@ -275,7 +275,7 @@ class Orchestrator:
             return result.dict()
         return wrapped
 
-    # ── Node implementations ──────────────────────────────────────────────────
+    # Node implementations
 
     def _node_retrieve(self, state: PipelineState) -> PipelineState:
         """Activate Retriever agent to fetch top-3 candidate seed papers."""
@@ -341,7 +341,7 @@ class Orchestrator:
             f"Paper {articles_at_depth + 1} — \"{target_paper.title}\""
         )
 
-        # Extractor → Evaluator → Inspector pipeline
+        # Extractor -> Evaluator -> Inspector pipeline
         self._progress("Extracting claims from paper...")
         raw_claims = self.extractor.run(target_paper, state.current_depth)
         self._progress(f"Evaluating {len(raw_claims)} extracted claims...")

@@ -13,13 +13,13 @@ its foundational sources, identifying where definitions shifted, and producing
 a coherent narrative. This is qualitatively different from the extraction and
 filtering tasks (which are classification/scoring tasks well within 8b capacity).
 
-The design proposal §3 specifies: "larger models only where comparative reasoning
+The design proposal 3 specifies: "larger models only where comparative reasoning
 is required." Synthesis is explicitly that case.
 
 GROUNDING STRATEGY:
 Every claim in the synthesis is attributed to its source paper. The Synthesiser
 prompt instructs the model to cite source_paper_id and depth for each claim used.
-This implements the "traceable outputs" requirement from the design proposal §1.
+This implements the "traceable outputs" requirement from the design proposal 1.
 
 HALLUCINATION MITIGATION:
 The Synthesiser only has access to the evaluated claims (not the raw paper text).
@@ -119,7 +119,7 @@ class SynthesiserAgent:
                 "**Most likely cause:** the selected seed paper has no open-access PDF "
                 "and its abstract was empty or unavailable from Semantic Scholar.\n\n"
                 "**Recommended action:** reject this synthesis (press 'r') and select "
-                "a different seed paper - preferably one marked ✓ Open Access."
+                "a different seed paper - preferably one marked [OK] Open Access."
             )
 
         claims_by_depth = self._format_claims_by_depth(tracing_results)

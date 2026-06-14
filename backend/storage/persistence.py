@@ -8,7 +8,7 @@ RESPONSIBILITIES:
 
 WHY POSTGRESQL WITH PGVECTOR (NOT A DEDICATED VECTOR DB):
 "PostgreSQL 16 with pgvector unifies metadata and embeddings, avoiding dedicated
-vector database overhead." (Design proposal §7, citing pgvector, 2021)
+vector database overhead." (Design proposal 7, citing pgvector, 2021)
 
 Using PostgreSQL for both relational metadata and vector embeddings means:
   - Single database to run, backup, and maintain (relevant for Docker Compose setup)
@@ -19,7 +19,7 @@ Using PostgreSQL for both relational metadata and vector embeddings means:
 WHY JSON LOG IN ADDITION TO POSTGRES:
 The JSON log is the human-readable audit trail. If the database is unavailable
 or the schema changes, the JSON log allows reconstruction of results. This
-implements the "traceable outputs" requirement from the design proposal §1:
+implements the "traceable outputs" requirement from the design proposal 1:
 every claim in the final output is traceable to its source paper, depth level,
 and validity score via the JSON log.
 

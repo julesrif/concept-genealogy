@@ -4,7 +4,7 @@ agents/inspector.py - Inspector agent (structural validator).
 ROLE IN ARCHITECTURE:
 The Inspector is not a generative LLM agent. It is a deterministic validation
 gate that applies Pydantic schema validation at every agent output boundary.
-This is a deliberate design choice (design proposal §5):
+This is a deliberate design choice (design proposal 5):
 
   "The Inspector applies deterministic Pydantic schema validation at each agent
    boundary to handle persistent LLM non-determinism (Atil et al., 2025)."

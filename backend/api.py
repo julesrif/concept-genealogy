@@ -553,9 +553,9 @@ async def get_graph(run_id: str):
         })
 
     # Add directed edges following genealogy flow:
-    #   Seed Paper → Concept → Reference Paper
-    # depth 0 papers introduce the concept (paper → concept)
-    # depth > 0 papers are traced FROM the concept (concept → paper)
+    #   Seed Paper -> Concept -> Reference Paper
+    # depth 0 papers introduce the concept (paper -> concept)
+    # depth > 0 papers are traced FROM the concept (concept -> paper)
     for paper_id, concept, depth in paper_concept_edges:
         concept_id = f"concept:{concept}"
         if depth == 0:

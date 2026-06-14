@@ -91,8 +91,8 @@ class CitationExtractorAgent:
         Main entry point. Returns extracted claims for a paper at a given depth.
 
         Extraction strategy:
-          1. If open_access_url is available → download PDF → extract full text
-          2. Otherwise → use abstract (flagged as low confidence)
+          1. If open_access_url is available -> download PDF -> extract full text
+          2. Otherwise -> use abstract (flagged as low confidence)
           3. Call Groq LLM with extraction prompt
           4. Inspector validates JSON output (called from Orchestrator after return)
         """

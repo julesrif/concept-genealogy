@@ -122,17 +122,17 @@ class PipelineState(BaseModel):
       - max_candidates: Retriever returns at most 3 papers to HITL gate
       - inspector_retries / synthesiser_retries: bounded retry policy
     """
-    # ── Pipeline control ──────────────────────────────────────────────────────
+    # Pipeline control
     stage: PipelineStage = PipelineStage.INIT
     user_concept: str = ""
     error_message: Optional[str] = None
 
-    # ── Retrieval ─────────────────────────────────────────────────────────────
+    # Retrieval
     candidate_papers: list[CandidatePaper] = Field(default_factory=list)
     selected_seed: Optional[CandidatePaper] = None
     max_candidates: int = 3  # design constraint: present top-3 to user
 
-    # ── Recursive tracing ─────────────────────────────────────────────────────
+    # Recursive tracing
     current_depth: int = 0
     max_depth: int = 3          # bounding scheme: depth cap (proposal Section 6)
     papers_per_level: int = 3   # max papers to trace at each depth level (fan-out)
@@ -141,17 +141,17 @@ class PipelineState(BaseModel):
     # BFS queue: paper IDs to trace at the current depth level
     pending_papers_at_depth: list[str] = Field(default_factory=list)
 
-    # ── Synthesis ─────────────────────────────────────────────────────────────
+    # Synthesis
     synthesis_text: Optional[str] = None
     challenger_critique: Optional[str] = None  # populated if Challenger is active
 
-    # ── Retry counters ────────────────────────────────────────────────────────
+    # Retry counters
     inspector_retries: int = 0
     max_inspector_retries: int = 1   # design constraint: max 1 retry for Pydantic errors
     synthesiser_retries: int = 0
     max_synthesiser_retries: int = 3  # design constraint: max 3 for Synthesiser/Challenger
 
-    # ── HITL gate flags ───────────────────────────────────────────────────────
+    # HITL gate flags
     # Four mandatory gates:
     #   Gate 1: seed selection approval
     #   Gate G: graph approval (before synthesis)
@@ -162,7 +162,7 @@ class PipelineState(BaseModel):
     hitl_gate_2_approved: bool = False
     hitl_gate_3_approved: bool = False
 
-    # ── Output ────────────────────────────────────────────────────────────────
+    # Output
     output_path: Optional[str] = None  # path to final JSON/Markdown deliverable
 
     class Config:

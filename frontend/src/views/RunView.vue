@@ -51,7 +51,7 @@
               <span>Year: {{ paper.year || 'N/A' }}</span>
               <span>Citations: {{ paper.citation_count || 0 }}</span>
               <span :class="paper.open_access_url ? 'oa-yes' : 'oa-no'">
-                {{ paper.open_access_url ? '✓ Open Access' : '✗ No OA PDF' }}
+                {{ paper.open_access_url ? '[OK] Open Access' : '✗ No OA PDF' }}
               </span>
             </div>
             <p v-if="paper.abstract" class="candidate-abstract">
@@ -65,7 +65,7 @@
             :disabled="selectedIdx === null || responding"
             @click="approveGate1"
           >
-            ✓ Select Paper {{ selectedIdx !== null ? selectedIdx + 1 : '' }}
+            [OK] Select Paper {{ selectedIdx !== null ? selectedIdx + 1 : '' }}
           </button>
           <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
             ✗ Reject All (New Search)
@@ -85,7 +85,7 @@
         <p v-else class="graph-loading">Loading graph data...</p>
         <div class="gate-actions">
           <button class="btn btn-success" :disabled="responding || !graphData" @click="approveGate">
-            ✓ Approve Graph
+            [OK] Approve Graph
           </button>
           <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
             ✗ Reject (Stop Pipeline)
@@ -105,7 +105,7 @@
         </div>
         <div class="gate-actions">
           <button class="btn btn-success" :disabled="responding" @click="approveGate">
-            ✓ Approve Synthesis
+            [OK] Approve Synthesis
           </button>
           <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
             ✗ Reject (Re-synthesise)
@@ -130,7 +130,7 @@
         </div>
         <div class="gate-actions">
           <button class="btn btn-success" :disabled="responding" @click="approveGate">
-            ✓ Approve & Persist
+            [OK] Approve & Persist
           </button>
           <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
             ✗ Reject (Back to Synthesis)
@@ -140,7 +140,7 @@
 
       <!-- Completed state -->
       <div v-if="run.status === 'completed'" class="card completed-card">
-        <h3>✓ Pipeline Complete</h3>
+        <h3>[OK] Pipeline Complete</h3>
         <p>Output saved to: <code>{{ run.output_path }}</code></p>
         <button class="btn btn-primary" @click="viewResult">View Result</button>
       </div>

@@ -4,7 +4,7 @@ agents/hitl.py - Human-in-the-Loop (HITL) gate implementations.
 WHY THREE MANDATORY GATES:
 "Unsupervised pipelines drift from user intent, and static models degrade over
 time (Mosqueira-Rey et al., 2023). Three mandatory HITL gates ensure the user
-can explicitly Approve, Reject, or Refine outputs." (Design proposal §6)
+can explicitly Approve, Reject, or Refine outputs." (Design proposal 6)
 
 The three gates correspond to the three highest-risk decision points in the pipeline:
   Gate 1 - Seed selection: the seed paper determines the entire citation chain.
@@ -68,7 +68,7 @@ class HITLGate:
         print(f"\nFound {len(candidates)} candidate papers for your concept:\n")
 
         for i, paper in enumerate(candidates, start=1):
-            oa_status = "✓ Open Access" if paper.open_access_url else "✗ No OA PDF"
+            oa_status = "[OK] Open Access" if paper.open_access_url else "✗ No OA PDF"
             print(f"  [{i}] {paper.title}")
             print(f"      Authors: {', '.join(paper.authors[:3])}" +
                   (" et al." if len(paper.authors) > 3 else ""))
@@ -107,10 +107,10 @@ class HITLGate:
                 choice = int(raw)
                 if 1 <= choice <= len(candidates):
                     selected = candidates[choice - 1]
-                    print(f"\n✓ Selected: '{selected.title}'")
+                    print(f"\n[OK] Selected: '{selected.title}'")
                     if not selected.open_access_url:
                         print(
-                            "\n  ⚠  WARNING: This paper has no open-access PDF.\n"
+                            "\n  [ALERT]  WARNING: This paper has no open-access PDF.\n"
                             "     Claim extraction will fall back to abstract only.\n"
                             "     Results may be limited - consider selecting an OA paper if available.\n"
                         )

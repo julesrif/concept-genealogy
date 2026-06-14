@@ -68,7 +68,7 @@ def main() -> None:
     final_state = orchestrator.run(args.concept)
 
     if final_state.stage.value == "done":
-        print(f"\n✓ Pipeline complete. Output saved to: {final_state.output_path}")
+        print(f"\n[OK] Pipeline complete. Output saved to: {final_state.output_path}")
     else:
         print(f"\n✗ Pipeline ended in state: {final_state.stage.value}")
         if final_state.error_message:

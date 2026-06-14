@@ -8,7 +8,7 @@ pipeline that crashes after 3 minutes of API calls because GROQ_API_KEY was
 unset wastes both quota and time.
 
 Pydantic BaseSettings reads from environment variables automatically, giving us:
-  - Type coercion (str → int for depth caps)
+  - Type coercion (str -> int for depth caps)
   - Validation with clear error messages
   - .env file support via python-dotenv
   - No scattered os.getenv() calls throughout the codebase

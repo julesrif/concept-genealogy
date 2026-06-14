@@ -146,7 +146,7 @@ class RetrieverAgent:
         Call the Semantic Scholar /paper/search endpoint.
 
         Query strategy: use the concept as-is for the first search.
-        The system assumes user input is well-formed English (design proposal §2,
+        The system assumes user input is well-formed English (design proposal 2,
         Assumptions). No query reformulation or disambiguation is attempted -
         that is out of scope for the MVP sprint.
         """

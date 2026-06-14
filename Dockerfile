@@ -12,7 +12,7 @@
 # compilation from source on Alpine - dramatically increasing build time and
 # introducing compatibility risk. Slim is the pragmatic choice here.
 #
-# Design requirement: Python 3.12+ (design proposal §2, Software requirements)
+# Design requirement: Python 3.12+ (design proposal 2, Software requirements)
 
 FROM python:3.12-slim
 
