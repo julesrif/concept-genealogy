@@ -155,6 +155,53 @@ class HITLGate:
 
         return self._prompt_approve_reject("Graph review")
 
+    def gate_concept_selection(self, concepts: list[str]) -> list[str] | None:
+        """
+        Concept Selection Gate (DOI mode): present extracted concepts for user
+        to select up to 3 concepts to trace.
+
+        Returns list of selected concepts (1-3), or None if rejected.
+        """
+        print("\n" + "=" * 60)
+        print("HITL GATE - Concept Selection (DOI Mode)")
+        print("=" * 60)
+        print(f"\nExtracted {len(concepts)} concepts from the paper:\n")
+
+        for i, concept in enumerate(concepts, start=1):
+            print(f"  [{i}] {concept}")
+
+        print("\nOptions:")
+        print("  Enter up to 3 numbers separated by commas (e.g. '1,3,5')")
+        print("  Enter 'r' to reject and stop pipeline")
+        print("  Enter 'q' to quit\n")
+
+        while True:
+            try:
+                raw = input("Your selection: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                logger.warning("HITL concept selection: non-interactive - auto-selecting first")
+                return [concepts[0]] if concepts else None
+
+            if raw == 'q':
+                raise SystemExit(0)
+            if raw == 'r':
+                logger.info("HITL concept selection: user rejected")
+                return None
+
+            try:
+                indices = [int(x.strip()) for x in raw.split(',')]
+                selected = []
+                for idx in indices[:3]:
+                    if 1 <= idx <= len(concepts):
+                        selected.append(concepts[idx - 1])
+                if selected:
+                    print(f"\n[OK] Selected concepts: {', '.join(selected)}")
+                    return selected
+                else:
+                    print(f"Please enter numbers between 1 and {len(concepts)}")
+            except ValueError:
+                print("Invalid input. Enter numbers separated by commas, 'r', or 'q'.")
+
     def gate_3_final_approval(
         self,
         synthesis_text: str | None,

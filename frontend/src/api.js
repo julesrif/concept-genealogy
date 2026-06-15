@@ -1,7 +1,12 @@
 const API_BASE = '/api'
 
-export async function startRun(concept, { depth = null, papersPerLevel = null } = {}) {
-  const body = { concept }
+export async function startRun(concept, { depth = null, papersPerLevel = null, doi = null } = {}) {
+  const body = {}
+  if (doi) {
+    body.doi = doi
+  } else {
+    body.concept = concept
+  }
   if (depth !== null) body.depth = depth
   if (papersPerLevel !== null) body.papers_per_level = papersPerLevel
 
@@ -26,9 +31,10 @@ export async function listRuns() {
   return res.json()
 }
 
-export async function respondToGate(runId, action, selectedIndex = null) {
+export async function respondToGate(runId, action, selectedIndex = null, selectedIndices = null) {
   const body = { action }
   if (selectedIndex !== null) body.selected_index = selectedIndex
+  if (selectedIndices !== null) body.selected_indices = selectedIndices
 
   const res = await fetch(`${API_BASE}/runs/${runId}/gate`, {
     method: 'POST',

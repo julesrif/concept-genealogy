@@ -108,6 +108,9 @@ class Orchestrator:
         graph = StateGraph(dict)
 
         # Nodes
+        graph.add_node("validate_doi", self._wrap_node(self._node_validate_doi))
+        graph.add_node("extract_concepts", self._wrap_node(self._node_extract_concepts))
+        graph.add_node("hitl_concept_selection", self._wrap_node(self._node_hitl_concept_selection))
         graph.add_node("retrieve", self._wrap_node(self._node_retrieve))
         graph.add_node("hitl_gate_1", self._wrap_node(self._node_hitl_gate_1))
         graph.add_node("trace_citation", self._wrap_node(self._node_trace_citation))
@@ -118,10 +121,24 @@ class Orchestrator:
         graph.add_node("hitl_gate_3", self._wrap_node(self._node_hitl_gate_3))
         graph.add_node("persist", self._wrap_node(self._node_persist))
 
-        # Entry point
-        graph.set_entry_point("retrieve")
+        # Entry point: route based on whether DOI mode is active
+        graph.set_entry_point("validate_doi")
 
-        # Edges
+        # validate_doi routes: DOI mode -> extract_concepts; concept mode -> retrieve
+        graph.add_conditional_edges(
+            "validate_doi",
+            self._route_after_doi_validation,
+        )
+
+        # extract_concepts -> concept selection HITL gate
+        graph.add_edge("extract_concepts", "hitl_concept_selection")
+
+        # Concept selection gate: approved -> trace_citation; rejected -> END
+        graph.add_conditional_edges(
+            "hitl_concept_selection",
+            lambda state: "trace_citation" if state.get("hitl_gate_1_approved") else END,
+        )
+
         # After retrieval -> HITL Gate 1 (mandatory: user must approve seed)
         graph.add_edge("retrieve", "hitl_gate_1")
 
@@ -166,9 +183,25 @@ class Orchestrator:
 
         return graph.compile()
 
+    def _route_after_doi_validation(self, state: dict) -> str:
+        """Route after DOI validation: DOI mode -> extract_concepts; else -> retrieve."""
+        if state.get("doi_mode"):
+            # In DOI mode: if DOI validation failed, go to END
+            if state.get("stage") == PipelineStage.FAILED.value:
+                return END
+            return "extract_concepts"
+        else:
+            # Concept mode: skip DOI validation, go to retrieve
+            return "retrieve"
+
     def _route_after_tracing(self, state: dict) -> str:
         """
         Routing logic for the breadth-first citation tracing loop.
+
+        PURE ROUTING FUNCTION — does NOT modify state. All state mutations
+        happen inside nodes (where _wrap_node serialises them back to the
+        LangGraph state dict). Mutating state here has no effect because
+        LangGraph passes a copy to conditional edge functions.
 
         BFS strategy: at each depth level, trace up to `papers_per_level` papers.
         When all papers at the current level are done, advance to the next depth
@@ -185,7 +218,6 @@ class Orchestrator:
         """
         current_depth = state.get("current_depth", 0)
         max_depth = state.get("max_depth", 3)
-        papers_per_level = state.get("papers_per_level", 3)
         visited = set(state.get("visited_paper_ids", []))
         pending = state.get("pending_papers_at_depth", [])
         tracing_results = state.get("tracing_results", [])
@@ -194,22 +226,7 @@ class Orchestrator:
         if pending:
             return "trace_citation"
 
-        # Current depth level is exhausted — try to advance to next depth
-        # Collect all unexplored references from papers traced at this depth level
-        next_depth = current_depth
-        all_refs_at_current_depth = []
-        for result in tracing_results:
-            if result.get("depth") == current_depth - 1:
-                # References discovered by papers at (current_depth - 1) form
-                # the pool for current_depth. But if current_depth was just
-                # completed, we need refs from papers at current_depth - 1.
-                pass
-
-        # Actually: papers traced at (current_depth - 1) have references that
-        # should be traced at current_depth. After the seed (depth 0) is traced,
-        # current_depth becomes 1. The seed's references form the depth-1 pool.
-        # After depth-1 papers are traced, their references form the depth-2 pool.
-
+        # Current depth level is exhausted — check if next level has refs
         # Collect refs from papers traced at the most recent depth level
         latest_depth = current_depth - 1  # last completed level
         all_new_refs = []
@@ -246,12 +263,8 @@ class Orchestrator:
             )
             return "hitl_graph_review"
 
-        # Populate the queue for the next depth level (up to papers_per_level)
-        state["pending_papers_at_depth"] = all_new_refs[:papers_per_level]
-        self._progress(
-            f"Advancing to depth {current_depth}: "
-            f"{min(len(all_new_refs), papers_per_level)} papers to trace"
-        )
+        # There ARE new refs to trace — route back to trace_citation.
+        # The node will populate its own queue (state mutation must happen there).
         return "trace_citation"
 
     @staticmethod
@@ -276,6 +289,143 @@ class Orchestrator:
         return wrapped
 
     # Node implementations
+
+    def _node_validate_doi(self, state: PipelineState) -> PipelineState:
+        """Validate DOI if in DOI mode; pass-through if in concept mode."""
+        if not state.doi_mode:
+            # Concept mode: skip validation, routing will send to retrieve
+            return state
+
+        state.stage = PipelineStage.VALIDATING_DOI
+        self._progress(f"Validating DOI: {state.input_doi}")
+
+        if not state.input_doi:
+            state.stage = PipelineStage.FAILED
+            state.error_message = "DOI mode requires a DOI to be provided."
+            return state
+
+        # Check if DOI exists via CrossRef
+        if not self.retriever.validate_doi(state.input_doi):
+            state.stage = PipelineStage.FAILED
+            state.error_message = f"DOI not found: {state.input_doi}. Please check the DOI and try again."
+            self._progress(f"DOI validation failed: {state.input_doi}", "ERROR")
+            return state
+
+        # Fetch the paper metadata from Semantic Scholar
+        paper = self.retriever.fetch_paper_by_doi(state.input_doi)
+        if not paper:
+            state.stage = PipelineStage.FAILED
+            state.error_message = (
+                f"DOI {state.input_doi} exists in CrossRef but could not be found in "
+                f"Semantic Scholar. The paper may not be indexed yet."
+            )
+            self._progress("Paper not found in Semantic Scholar", "ERROR")
+            return state
+
+        # In DOI mode, the provided paper IS the Gold Standard (seed paper)
+        state.selected_seed = paper
+        state.visited_paper_ids.add(paper.paper_id)
+        self._progress(f"DOI validated. Paper: \"{paper.title}\"")
+        return state
+
+    def _node_extract_concepts(self, state: PipelineState) -> PipelineState:
+        """Extract key concepts from the DOI paper for user selection."""
+        state.stage = PipelineStage.EXTRACTING_CONCEPTS
+        self._progress("Extracting concepts from the paper...")
+
+        paper = state.selected_seed
+        if not paper:
+            state.stage = PipelineStage.FAILED
+            state.error_message = "No seed paper available for concept extraction."
+            return state
+
+        # Get paper text (OA or Elsevier or abstract)
+        text = ""
+        if paper.open_access_url:
+            text, _ = self.extractor._extract_from_pdf(paper.open_access_url)
+        if not text.strip() and paper.doi and self.extractor.elsevier:
+            text = self.extractor.elsevier.get_full_text(paper.doi) or ""
+        if not text.strip():
+            text = paper.abstract or ""
+
+        if not text.strip():
+            state.stage = PipelineStage.FAILED
+            state.error_message = "Could not retrieve paper text for concept extraction."
+            self._progress("No text available for concept extraction", "ERROR")
+            return state
+
+        # Use LLM to extract key concepts
+        concepts = self._extract_concepts_from_text(text, paper.title)
+        if not concepts:
+            state.stage = PipelineStage.FAILED
+            state.error_message = "Could not extract concepts from the paper."
+            self._progress("Concept extraction failed", "ERROR")
+            return state
+
+        state.extracted_concepts = concepts
+        state.stage = PipelineStage.AWAITING_CONCEPT_SELECTION
+        self._progress(f"Extracted {len(concepts)} concepts. Please select up to 3 to trace.")
+        return state
+
+    def _extract_concepts_from_text(self, text: str, title: str) -> list[str]:
+        """Use LLM to extract key academic concepts from paper text."""
+        groq = self.config.get("_groq_client")
+        if not groq:
+            return []
+
+        # Truncate text to fit context window
+        truncated = text[:8000]
+        prompt = (
+            f"You are an academic concept analyst. Given the following paper, "
+            f"extract the KEY ACADEMIC CONCEPTS that this paper introduces, develops, "
+            f"or significantly contributes to.\n\n"
+            f"Paper title: \"{title}\"\n"
+            f"Paper text:\n{truncated}\n\n"
+            f"Return ONLY a JSON array of concept strings (5-15 concepts). "
+            f"Each concept should be 1-5 words, representing a distinct academic idea "
+            f"that could be traced through citation chains.\n"
+            f"Focus on: novel methods, frameworks, mechanisms, theories, and key techniques.\n"
+            f"Do NOT include generic terms like 'machine learning' or 'deep learning' unless "
+            f"the paper specifically advances them.\n\n"
+            f"JSON array:"
+        )
+
+        try:
+            response = groq.chat_completion(
+                model=self.config.get("groq_model_fast", "llama-3.1-8b-instant"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=500,
+            )
+            raw = response.choices[0].message.content.strip()
+            # Parse JSON array
+            import json
+            # Handle potential code fences
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+            concepts = json.loads(raw)
+            if isinstance(concepts, list):
+                return [str(c).strip() for c in concepts if c and str(c).strip()][:15]
+        except Exception as e:
+            logger.warning("Concept extraction LLM call failed: %s", e)
+        return []
+
+    def _node_hitl_concept_selection(self, state: PipelineState) -> PipelineState:
+        """HITL gate: present extracted concepts for user to select up to 3."""
+        selected = self.hitl.gate_concept_selection(state.extracted_concepts)
+        if selected:
+            state.selected_concepts = selected[:3]
+            # Use the first selected concept as the primary tracing concept
+            state.user_concept = state.selected_concepts[0]
+            state.hitl_gate_1_approved = True
+            self._progress(
+                f"Concepts selected: {', '.join(state.selected_concepts)}. "
+                f"Primary concept for tracing: \"{state.user_concept}\""
+            )
+        else:
+            state.hitl_gate_1_approved = False
+            self._progress("Concept selection rejected. Pipeline stopped.", "WARNING")
+        return state
 
     def _node_retrieve(self, state: PipelineState) -> PipelineState:
         """Activate Retriever agent to fetch top-3 candidate seed papers."""
@@ -323,6 +473,13 @@ class Orchestrator:
             # First iteration: trace the seed paper
             target_paper = state.selected_seed
         else:
+            # If the queue is empty, populate it from the previous depth's refs.
+            # This MUST happen here (in a node) not in the routing function,
+            # because LangGraph routing functions receive a state copy — mutations
+            # there are not persisted back to the graph state.
+            if not state.pending_papers_at_depth:
+                self._populate_next_depth_queue(state)
+
             # Pop next paper from BFS queue
             target_paper = self._pop_next_paper(state)
 
@@ -352,7 +509,17 @@ class Orchestrator:
 
         # Fetch the paper's references from Semantic Scholar for the next level
         self._progress("Fetching references...")
-        ref_ids = self.retriever.get_references(target_paper.paper_id)
+        # Ensure DOI is available for CrossRef lookup — S2 search may not always
+        # return externalIds, but individual paper fetch does.
+        doi = target_paper.doi
+        if not doi and target_paper.paper_id:
+            logger.info("DOI missing on paper %s — fetching from S2 detail endpoint", target_paper.paper_id)
+            detail = self.retriever.fetch_paper_by_id(target_paper.paper_id)
+            if detail and detail.doi:
+                doi = detail.doi
+                target_paper.doi = doi
+                logger.info("Resolved DOI: %s", doi)
+        ref_ids = self.retriever.get_references(target_paper.paper_id, doi=doi)
         validated_result.references_explored = ref_ids
         self._progress(
             f"Depth {state.current_depth} — "
@@ -369,13 +536,19 @@ class Orchestrator:
         # If this was depth 0 (seed), advance depth counter immediately
         # For deeper levels, depth advances when the queue is exhausted (in routing)
         if state.current_depth == 0:
+            # Set the initial concept at depth 0
+            state.concept_at_depth[0] = state.user_concept
             state.current_depth = 1
+            # Compute concept abstraction for the next depth
+            self._abstract_concept_for_depth(state, completed_depth=0)
         else:
             # Remove processed paper from the pending queue
             if target_paper.paper_id in state.pending_papers_at_depth:
                 state.pending_papers_at_depth.remove(target_paper.paper_id)
             # If queue is now empty, advance depth for next level
             if not state.pending_papers_at_depth:
+                # Compute concept abstraction before advancing
+                self._abstract_concept_for_depth(state, completed_depth=state.current_depth)
                 state.current_depth += 1
 
         return state
@@ -387,7 +560,7 @@ class Orchestrator:
         # Notify API layer that tracing is complete so graph data is available
         tracing_cb = self.config.get("_tracing_complete_callback")
         if tracing_cb:
-            tracing_cb(state.tracing_results, state.selected_seed)
+            tracing_cb(state.tracing_results, state.selected_seed, state.concept_at_depth)
 
         self._progress("Tracing complete. Review the genealogy graph.")
         approved = self.hitl.gate_graph_review()
@@ -425,7 +598,11 @@ class Orchestrator:
         """Activate Challenger to interrogate synthesis (adversarial review)."""
         state.stage = PipelineStage.CHALLENGING
         self._progress("Running adversarial review on synthesis...")
-        critique = self.challenger.run(state.synthesis_text, state.tracing_results)
+        critique = self.challenger.run(
+            state.synthesis_text,
+            state.tracing_results,
+            user_concept=state.user_concept,
+        )
         state.challenger_critique = critique
         self._progress("Challenge complete. Final review ready.")
         state.stage = PipelineStage.AWAITING_FINAL_APPROVAL
@@ -449,26 +626,155 @@ class Orchestrator:
         self._progress("Pipeline complete!")
         logger.info("Pipeline complete. Output at: %s", output_path)
         return state
+    def _populate_next_depth_queue(self, state: "PipelineState") -> None:
+        """
+        Populate pending_papers_at_depth from the previous depth's references.
+
+        Called at the start of trace_citation (depth > 0) when the queue is empty.
+        Collects all unvisited reference IDs from papers traced at (current_depth - 1),
+        fetches their metadata, ranks by SJR, and takes the top papers_per_level.
+        This ensures we trace the highest-quality references first.
+        """
+        latest_depth = state.current_depth - 1
+        papers_per_level = state.papers_per_level or 3
+        all_new_refs = []
+        for result in state.tracing_results:
+            if result.depth == latest_depth:
+                for ref_id in result.references_explored:
+                    if ref_id not in state.visited_paper_ids and ref_id not in all_new_refs:
+                        all_new_refs.append(ref_id)
+
+        if not all_new_refs:
+            state.pending_papers_at_depth = []
+            return
+
+        # Fetch metadata for candidates and rank by SJR before selecting top-N.
+        # We fetch up to 2x papers_per_level to have a good pool for ranking,
+        # while not wasting too many API calls on papers we won't trace.
+        fetch_pool_size = min(len(all_new_refs), papers_per_level * 2)
+        candidates = []
+        for ref_id in all_new_refs[:fetch_pool_size]:
+            paper = self.retriever.fetch_paper_by_id(ref_id)
+            if paper:
+                candidates.append(paper)
+
+        if candidates:
+            # Rank by SJR (same logic as retriever's _rank_by_sjr)
+            ranked = self.retriever._rank_by_sjr(candidates)
+            state.pending_papers_at_depth = [p.paper_id for p in ranked[:papers_per_level]]
+            # Cache the fetched metadata so _pop_next_paper doesn't re-fetch
+            if not hasattr(state, '_paper_cache'):
+                state._paper_cache = {}
+            for p in ranked[:papers_per_level]:
+                state._paper_cache[p.paper_id] = p
+        else:
+            state.pending_papers_at_depth = all_new_refs[:papers_per_level]
+
+        self._progress(
+            f"Advancing to depth {state.current_depth}: "
+            f"{len(state.pending_papers_at_depth)} papers to trace"
+        )
+        logger.info(
+            "Populated depth %d queue: %d/%d new refs (papers_per_level=%d, ranked by SJR)",
+            state.current_depth, len(state.pending_papers_at_depth),
+            len(all_new_refs), papers_per_level
+        )
+
+    def _abstract_concept_for_depth(self, state: PipelineState, completed_depth: int) -> None:
+        """
+        Identify the precursor/ancestor concept for the next depth level.
+
+        WHY CONCEPT ABSTRACTION:
+        As citation tracing moves backward in time, modern terminology often
+        did not exist in older papers. "Attention mechanism" (Vaswani et al., 2017)
+        traces back to "selective attention" (Treisman, 1964) or "saliency maps"
+        (Koch and Ullman, 1985). Without abstracting the concept, the relevance
+        filter at deeper levels would discard papers that ARE ancestral but use
+        different terminology. This step asks the LLM to identify what the concept
+        was called (or what broader idea it belonged to) in the era of the papers
+        being traced, enabling the evaluator to match against the abstracted term.
+
+        The abstraction may also determine that the concept originated at the
+        current depth (not deeper), which is stored for the synthesis narrative.
+        """
+        groq = self.config.get("_groq_client")
+        if not groq:
+            # Fallback: use original concept at all depths
+            state.concept_at_depth[completed_depth + 1] = state.user_concept
+            return
+
+        # Gather claims from the completed depth
+        depth_claims = []
+        for result in state.tracing_results:
+            if result.depth == completed_depth:
+                for claim in result.claims:
+                    depth_claims.append(claim.claim_text)
+
+        if not depth_claims:
+            # No claims extracted — carry forward the previous concept
+            prev_concept = state.concept_at_depth.get(completed_depth, state.user_concept)
+            state.concept_at_depth[completed_depth + 1] = prev_concept
+            return
+
+        claims_text = "\n".join(f"- {c}" for c in depth_claims[:15])  # cap to avoid token overflow
+        current_concept = state.concept_at_depth.get(completed_depth, state.user_concept)
+
+        prompt = (
+            f"You are tracing the genealogy of the academic concept: \"{state.user_concept}\"\n"
+            f"At the current citation depth, the concept is understood as: \"{current_concept}\"\n\n"
+            f"Below are claims extracted from papers at this depth level:\n{claims_text}\n\n"
+            f"Based on these claims and the citation chain, what is the PRECURSOR or ANCESTOR "
+            f"concept that these papers are building upon? This is the broader or older concept "
+            f"that existed BEFORE \"{current_concept}\" was formalised — the idea it evolved from.\n\n"
+            f"Rules:\n"
+            f"- If the concept appears to have ORIGINATED at this depth (i.e., the papers introduce "
+            f"it as novel rather than building on a prior idea), respond with the same concept name.\n"
+            f"- Otherwise, identify the precursor terminology used in the referenced older literature.\n"
+            f"- Keep it concise: 1-5 words, an academic concept name.\n\n"
+            f"Respond with ONLY the concept name, no explanation:"
+        )
+
+        try:
+            response = groq.chat_completion(
+                model=self.config.get("groq_model_fast", "llama-3.1-8b-instant"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=50,
+            )
+            abstracted = response.choices[0].message.content.strip().strip('"\'')
+            state.concept_at_depth[completed_depth + 1] = abstracted
+            self._progress(
+                f"Concept abstraction: depth {completed_depth} \"{current_concept}\" "
+                f"→ depth {completed_depth + 1} \"{abstracted}\""
+            )
+            logger.info(
+                "Concept abstraction: depth %d '%s' -> depth %d '%s'",
+                completed_depth, current_concept, completed_depth + 1, abstracted
+            )
+        except Exception as e:
+            logger.warning("Concept abstraction failed: %s — using previous concept", e)
+            state.concept_at_depth[completed_depth + 1] = current_concept
 
     def _pop_next_paper(self, state: PipelineState) -> "CandidatePaper | None":
         """
-        Pop the next paper from the BFS queue and fetch its full metadata.
+        Pop the next paper from the BFS queue and return its metadata.
 
-        WHY SJR RANKING FOR SELECTION:
-        SJR (SCImago Journal Rank) is a field-normalised impact metric that accounts
-        for citation prestige, not just count (SCImago, n.d.). Using it to prioritise
-        which references to trace next implements the 'SJR-ranked limits' component
-        of the three-constraint bounding scheme, ensuring we follow the highest-quality
-        citation chains first when the depth cap forces us to be selective.
+        Uses the paper cache populated by _populate_next_depth_queue to avoid
+        redundant S2 API calls. Falls back to fetching if not cached.
         """
         if not state.pending_papers_at_depth:
             return None
+
+        cache = getattr(state, '_paper_cache', {})
 
         # Try each queued paper ID until we find one with fetchable metadata
         for ref_id in list(state.pending_papers_at_depth):
             if ref_id in state.visited_paper_ids:
                 state.pending_papers_at_depth.remove(ref_id)
                 continue
+            # Check cache first (populated during SJR ranking in _populate_next_depth_queue)
+            if ref_id in cache:
+                return cache.pop(ref_id)
             paper = self.retriever.fetch_paper_by_id(ref_id)
             if paper is not None:
                 return paper
@@ -477,16 +783,21 @@ class Orchestrator:
 
         return None
 
-    def run(self, user_concept: str) -> PipelineState:
-        """Entry point: run the full pipeline for a user concept."""
+    def run(self, user_concept: str, input_doi: str | None = None) -> PipelineState:
+        """Entry point: run the full pipeline for a user concept or DOI."""
+        doi_mode = bool(input_doi and input_doi.strip())
         initial_state = PipelineState(
-            user_concept=user_concept,
+            user_concept=user_concept if not doi_mode else "",
+            input_doi=input_doi.strip() if doi_mode else None,
+            doi_mode=doi_mode,
             max_depth=self.config.get("max_depth", 3),
             papers_per_level=self.config.get("papers_per_level", 3),
         )
-        # BFS tracing with fan-out needs more iterations than default 25:
-        # worst case = 1 seed + (max_depth * papers_per_level) traces + gates + synthesis
-        max_iterations = 10 + (initial_state.max_depth * initial_state.papers_per_level * 2)
+        # BFS tracing with fan-out needs more iterations than LangGraph default (25):
+        # Each depth level traces papers_per_level papers (one node invocation each),
+        # plus HITL gates, synthesis, challenge, and persistence nodes.
+        # Formula: seed(1) + depth*papers_per_level + gates(4) + synth+challenge+persist(3) + margin
+        max_iterations = 20 + (initial_state.max_depth * initial_state.papers_per_level * 4)
         final_state_dict = self.graph.invoke(
             initial_state.dict(),
             config={"recursion_limit": max_iterations},

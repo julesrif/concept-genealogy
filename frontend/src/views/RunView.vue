@@ -50,9 +50,20 @@
               <span>{{ (paper.authors || []).slice(0, 3).join(', ') }}{{ paper.authors?.length > 3 ? ' et al.' : '' }}</span>
               <span>Year: {{ paper.year || 'N/A' }}</span>
               <span>Citations: {{ paper.citation_count || 0 }}</span>
-              <span :class="paper.open_access_url ? 'oa-yes' : 'oa-no'">
-                {{ paper.open_access_url ? '[OK] Open Access' : '✗ No OA PDF' }}
+              <span v-if="paper.sjr_score" class="sjr-score">SJR: {{ paper.sjr_score.toFixed(2) }}</span>
+              <span :class="paper.open_access_url ? 'oa-yes' : paper.doi ? 'oa-elsevier' : 'oa-no'">
+                {{ paper.open_access_url ? '✓ Open Access' : paper.doi ? '✓ Elsevier (via DOI)' : '✗ Abstract only' }}
               </span>
+              <a
+                v-if="paper.doi"
+                :href="`https://doi.org/${paper.doi}`"
+                target="_blank"
+                rel="noopener"
+                class="doi-link"
+                @click.stop
+              >
+                DOI ↗
+              </a>
             </div>
             <p v-if="paper.abstract" class="candidate-abstract">
               {{ paper.abstract.slice(0, 250) }}{{ paper.abstract.length > 250 ? '...' : '' }}
@@ -73,12 +84,91 @@
         </div>
       </div>
 
+      <!-- HITL Concept Selection Gate (DOI mode) -->
+      <div v-if="run.current_gate?.gate_type === 'concept_selection'" class="card gate-card">
+        <h3>🔬 Select Concepts to Trace</h3>
+        <p class="gate-desc">
+          The following concepts were extracted from the paper.
+          Select up to 3 concepts to trace through citation chains.
+        </p>
+        <div class="concept-list">
+          <div
+            v-for="(concept, idx) in run.current_gate.concepts"
+            :key="idx"
+            :class="['concept-item', { selected: selectedConceptIndices.includes(idx) }]"
+            @click="toggleConcept(idx)"
+          >
+            <span class="concept-check">{{ selectedConceptIndices.includes(idx) ? '☑' : '☐' }}</span>
+            <span class="concept-text">{{ concept }}</span>
+          </div>
+        </div>
+        <p class="concept-count">
+          {{ selectedConceptIndices.length }}/3 selected
+        </p>
+        <div class="gate-actions">
+          <button
+            class="btn btn-success"
+            :disabled="selectedConceptIndices.length === 0 || responding"
+            @click="approveConceptSelection"
+          >
+            [OK] Trace Selected Concepts
+          </button>
+          <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
+            ✗ Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Tracing Progress (visible during tracing stage) -->
+      <div v-if="run.stage === 'tracing' && tracingProgress.currentDepth >= 0" class="card tracing-progress-card">
+        <h3>🔍 Tracing Citations</h3>
+        <div class="tracing-stats">
+          <div class="tracing-stat">
+            <span class="stat-label">Depth</span>
+            <span class="stat-value">{{ tracingProgress.currentDepth }} / {{ tracingProgress.maxDepth }}</span>
+          </div>
+          <div class="tracing-stat">
+            <span class="stat-label">Papers traced</span>
+            <span class="stat-value">{{ tracingProgress.papersTraced }}</span>
+          </div>
+          <div class="tracing-stat">
+            <span class="stat-label">Claims found</span>
+            <span class="stat-value">{{ tracingProgress.totalClaims }}</span>
+          </div>
+          <div class="tracing-stat">
+            <span class="stat-label">References found</span>
+            <span class="stat-value">{{ tracingProgress.totalRefs }}</span>
+          </div>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar" :style="{ width: tracingProgress.percent + '%' }"></div>
+        </div>
+        <p class="tracing-current" v-if="tracingProgress.currentPaper">
+          Currently: {{ tracingProgress.currentPaper }}
+        </p>
+        <div v-if="tracingProgress.conceptAbstractions.length" class="concept-abstractions">
+          <span class="stat-label">Concept evolution:</span>
+          <div class="concept-chain">
+            <span
+              v-for="(abs, idx) in tracingProgress.conceptAbstractions"
+              :key="idx"
+              class="concept-step"
+            >
+              <span class="concept-name">{{ abs.fromConcept }}</span>
+              <span class="concept-arrow">→</span>
+            </span>
+            <span class="concept-name concept-current">
+              {{ tracingProgress.conceptAbstractions[tracingProgress.conceptAbstractions.length - 1].toConcept }}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- HITL Graph Gate: Review genealogy graph before synthesis -->
       <div v-if="run.current_gate?.gate_type === 'graph_review'" class="card gate-card">
         <h3>🌳 Graph Review: Concept Genealogy</h3>
         <p class="gate-desc">
-          Review the traced concept genealogy graph below.
-          Gold = seed paper, purple = concept (only those with references), blue = reference papers.
+          Review the traced citation chain below. Nodes are colour-coded by depth level.
           Approve to proceed with synthesis, or reject to stop.
         </p>
         <GenealogyGraph v-if="graphData" :graphData="graphData" />
@@ -178,7 +268,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getRun, respondToGate, getLogs, getGraph } from '../api.js'
 import GenealogyGraph from '../components/GenealogyGraph.vue'
@@ -189,6 +279,7 @@ const router = useRouter()
 const run = ref(null)
 const logs = ref([])
 const selectedIdx = ref(null)
+const selectedConceptIndices = ref([])
 const responding = ref(false)
 const logContainer = ref(null)
 const graphData = ref(null)
@@ -197,6 +288,9 @@ let logOffset = 0
 let graphFetched = false
 
 const stages = [
+  { key: 'validating_doi', label: 'Validating DOI' },
+  { key: 'extracting_concepts', label: 'Extracting Concepts' },
+  { key: 'awaiting_concept_selection', label: 'Concept Selection' },
   { key: 'retrieving', label: 'Retrieving' },
   { key: 'awaiting_seed_approval', label: 'Seed Selection' },
   { key: 'tracing', label: 'Tracing Citations' },
@@ -210,6 +304,52 @@ const stages = [
 ]
 
 const stageOrder = stages.map(s => s.key)
+
+// Parse tracing progress from pipeline log messages
+const tracingProgress = computed(() => {
+  const progress = { currentDepth: -1, maxDepth: 3, papersTraced: 0, totalClaims: 0, totalRefs: 0, currentPaper: '', conceptAbstractions: [], percent: 0 }
+  for (const entry of logs.value) {
+    if (entry.source !== 'pipeline') continue
+    const msg = entry.message
+
+    // "Depth N, Paper M — "Title""
+    const depthMatch = msg.match(/Depth (\d+), Paper (\d+) — "(.+)"/)
+    if (depthMatch) {
+      progress.currentDepth = parseInt(depthMatch[1])
+      progress.papersTraced++
+      progress.currentPaper = depthMatch[3]
+    }
+
+    // "Depth N — X claims, Y references found"
+    const resultMatch = msg.match(/Depth \d+ — (\d+) claims, (\d+) references found/)
+    if (resultMatch) {
+      progress.totalClaims += parseInt(resultMatch[1])
+      progress.totalRefs += parseInt(resultMatch[2])
+    }
+
+    // "Advancing to depth N: M papers to trace"
+    const advanceMatch = msg.match(/Advancing to depth (\d+)/)
+    if (advanceMatch) {
+      progress.currentDepth = parseInt(advanceMatch[1])
+    }
+
+    // "Concept abstraction: depth N "X" → depth N+1 "Y""
+    const abstractMatch = msg.match(/Concept abstraction: depth (\d+) "(.+?)" → depth (\d+) "(.+?)"/)
+    if (abstractMatch) {
+      progress.conceptAbstractions.push({
+        fromDepth: parseInt(abstractMatch[1]),
+        fromConcept: abstractMatch[2],
+        toDepth: parseInt(abstractMatch[3]),
+        toConcept: abstractMatch[4],
+      })
+    }
+  }
+  // Estimate percent based on depth progression
+  if (progress.currentDepth >= 0) {
+    progress.percent = Math.min(95, Math.round((progress.currentDepth / progress.maxDepth) * 100))
+  }
+  return progress
+})
 
 function isStageActive(key) {
   return run.value?.stage === key
@@ -285,6 +425,27 @@ async function approveGate1() {
   try {
     await respondToGate(props.runId, 'approve', selectedIdx.value)
     selectedIdx.value = null
+    await fetchRun()
+  } finally {
+    responding.value = false
+  }
+}
+
+function toggleConcept(idx) {
+  const i = selectedConceptIndices.value.indexOf(idx)
+  if (i >= 0) {
+    selectedConceptIndices.value.splice(i, 1)
+  } else if (selectedConceptIndices.value.length < 3) {
+    selectedConceptIndices.value.push(idx)
+  }
+}
+
+async function approveConceptSelection() {
+  if (selectedConceptIndices.value.length === 0) return
+  responding.value = true
+  try {
+    await respondToGate(props.runId, 'approve', null, selectedConceptIndices.value)
+    selectedConceptIndices.value = []
     await fetchRun()
   } finally {
     responding.value = false
@@ -410,6 +571,98 @@ onUnmounted(() => {
   border-left: 4px solid var(--color-warning);
 }
 
+.tracing-progress-card {
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--color-primary);
+}
+
+.tracing-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.tracing-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.progress-bar-container {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.tracing-current {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.concept-abstractions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.concept-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+}
+
+.concept-step {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.concept-name {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.concept-name.concept-current {
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.concept-arrow {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
 .gate-card h3 {
   margin-bottom: 0.5rem;
 }
@@ -482,8 +735,27 @@ onUnmounted(() => {
   color: var(--color-success);
 }
 
+.oa-elsevier {
+  color: var(--color-success);
+}
+
 .oa-no {
   color: var(--color-danger);
+}
+
+.doi-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.doi-link:hover {
+  text-decoration: underline;
+}
+
+.sjr-score {
+  font-weight: 600;
+  color: #7c3aed;
 }
 
 .candidate-abstract {
@@ -497,6 +769,48 @@ onUnmounted(() => {
 .gate-actions {
   display: flex;
   gap: 1rem;
+}
+
+.concept-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.concept-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.concept-item:hover {
+  border-color: var(--color-primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.concept-item.selected {
+  border-color: var(--color-primary);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.concept-check {
+  font-size: 1.125rem;
+}
+
+.concept-text {
+  font-weight: 500;
+}
+
+.concept-count {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 1rem;
 }
 
 .synthesis-content {

@@ -3,23 +3,52 @@
     <div class="hero">
       <h2>Academic Concept Tracing</h2>
       <p>
-        Enter an academic concept to trace its genealogy through citation chains.
-        The system will identify a seed paper, recursively extract claims, and
-        build a semantic provenance graph.
+        Enter an academic concept to trace its genealogy through citation chains,
+        or provide a DOI to use a specific paper as the starting point.
       </p>
     </div>
 
     <form class="card run-form" @submit.prevent="handleSubmit">
-      <div class="form-group">
+      <!-- Input mode toggle -->
+      <div class="input-mode-toggle">
+        <button
+          type="button"
+          :class="['mode-btn', { active: inputMode === 'concept' }]"
+          @click="inputMode = 'concept'"
+        >
+          By Concept
+        </button>
+        <button
+          type="button"
+          :class="['mode-btn', { active: inputMode === 'doi' }]"
+          @click="inputMode = 'doi'"
+        >
+          By DOI
+        </button>
+      </div>
+
+      <div v-if="inputMode === 'concept'" class="form-group">
         <label for="concept">Research Concept</label>
         <input
           id="concept"
           v-model="concept"
           type="text"
           placeholder="e.g. attention mechanism, reinforcement learning from human feedback"
-          required
           :disabled="loading"
         />
+      </div>
+      <div v-if="inputMode === 'doi'" class="form-group">
+        <label for="doi">Paper DOI</label>
+        <input
+          id="doi"
+          v-model="doi"
+          type="text"
+          placeholder="e.g. 10.48550/arXiv.1706.03762"
+          :disabled="loading"
+        />
+        <small class="doi-hint">
+          The paper will become the seed. You'll select up to 3 concepts to trace.
+        </small>
       </div>
       <div class="form-group">
         <label for="depth">Max Citation Depth (optional)</label>
@@ -45,7 +74,7 @@
           :disabled="loading"
         />
       </div>
-      <button type="submit" class="btn btn-primary" :disabled="loading || !concept.trim()">
+      <button type="submit" class="btn btn-primary" :disabled="loading || !isValid">
         {{ loading ? 'Starting...' : 'Start Tracing' }}
       </button>
       <p v-if="error" class="error">{{ error }}</p>
@@ -75,12 +104,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { startRun, listRuns } from '../api.js'
 
 const router = useRouter()
+const inputMode = ref('concept')
 const concept = ref('')
+const doi = ref('')
 const depth = ref(null)
 const papersPerLevel = ref(null)
 const loading = ref(false)
@@ -88,14 +119,26 @@ const error = ref('')
 const recentRuns = ref([])
 let pollInterval = null
 
+const isValid = computed(() => {
+  if (inputMode.value === 'concept') return concept.value.trim().length > 0
+  return doi.value.trim().length > 0
+})
+
 async function handleSubmit() {
   loading.value = true
   error.value = ''
   try {
-    const run = await startRun(concept.value.trim(), {
+    const opts = {
       depth: depth.value || null,
       papersPerLevel: papersPerLevel.value || null,
-    })
+    }
+    if (inputMode.value === 'doi') {
+      opts.doi = doi.value.trim()
+    }
+    const run = await startRun(
+      inputMode.value === 'concept' ? concept.value.trim() : null,
+      opts
+    )
     router.push({ name: 'run', params: { runId: run.run_id } })
   } catch (e) {
     error.value = e.message
@@ -224,6 +267,42 @@ onUnmounted(() => {
 .run-item-meta {
   display: flex;
   justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.input-mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: var(--color-bg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mode-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.mode-btn:not(.active):hover {
+  background: var(--color-bg-secondary, #f1f5f9);
+}
+
+.doi-hint {
+  display: block;
+  margin-top: 0.375rem;
   font-size: 0.8125rem;
   color: var(--color-text-secondary);
 }

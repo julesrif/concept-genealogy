@@ -14,7 +14,6 @@ Endpoints:
   GET  /api/runs/{run_id}/result - Get final result (JSON output)
 """
 
-import asyncio
 import logging
 import os
 import threading
@@ -54,6 +53,7 @@ logger = logging.getLogger(__name__)
 # ── Run store (in-memory for MVP; could be Redis/DB for production) ─────────
 class GateType(str, Enum):
     SEED_SELECTION = "seed_selection"
+    CONCEPT_SELECTION = "concept_selection"
     GRAPH_REVIEW = "graph_review"
     SYNTHESIS_APPROVAL = "synthesis_approval"
     FINAL_APPROVAL = "final_approval"
@@ -63,6 +63,7 @@ class GateRequest(BaseModel):
     """Data presented to the user at an HITL gate."""
     gate_type: GateType
     candidates: list[dict] = Field(default_factory=list)  # Gate 1
+    concepts: list[str] = Field(default_factory=list)      # DOI mode concept selection
     synthesis_text: Optional[str] = None                   # Gate 2 & 3
     challenger_critique: Optional[str] = None              # Gate 3
 
@@ -105,6 +106,7 @@ class RunStore:
         self._pipeline_states: dict[str, PipelineState] = {}
         self._tracing_results: dict[str, list] = {}
         self._seed_papers: dict[str, dict] = {}
+        self._concept_at_depth: dict[str, dict] = {}
         self._logs: dict[str, deque[LogEntry]] = {}
         self._lock = threading.Lock()
 
@@ -191,16 +193,18 @@ class RunStore:
             logs = self._logs.get(run_id, deque())
             return list(logs)[since:]
 
-    def set_tracing_results(self, run_id: str, results: list, seed_paper: dict):
+    def set_tracing_results(self, run_id: str, results: list, seed_paper: dict, concept_at_depth: dict = None):
         with self._lock:
             self._tracing_results[run_id] = results
             self._seed_papers[run_id] = seed_paper
+            self._concept_at_depth[run_id] = concept_at_depth or {}
 
-    def get_tracing_results(self, run_id: str) -> tuple[list, dict | None]:
+    def get_tracing_results(self, run_id: str) -> tuple[list, dict | None, dict]:
         with self._lock:
             return (
                 self._tracing_results.get(run_id, []),
                 self._seed_papers.get(run_id),
+                self._concept_at_depth.get(run_id, {}),
             )
 
 
@@ -237,6 +241,28 @@ class WebHITLGate:
             if 0 <= idx < len(candidates):
                 return True, candidates[idx]
         return False, None
+
+    def gate_concept_selection(self, concepts: list[str]) -> list[str] | None:
+        """Present extracted concepts for user selection (DOI mode)."""
+        gate = GateRequest(
+            gate_type=GateType.CONCEPT_SELECTION,
+            concepts=concepts,
+        )
+        self.store.set_gate(self.run_id, gate)
+        response = self.store.wait_for_gate_response(self.run_id)
+
+        if not response:
+            return None
+
+        action = response.get("action", "reject")
+        if action == "approve":
+            indices = response.get("selected_indices", [])
+            selected = []
+            for idx in indices[:3]:
+                if 0 <= idx < len(concepts):
+                    selected.append(concepts[idx])
+            return selected if selected else None
+        return None
 
     def gate_2_synthesis_approval(self, synthesis_text: Optional[str]) -> bool:
         gate = GateRequest(
@@ -299,7 +325,7 @@ class RunLogHandler(logging.Handler):
             pass
 
 
-def run_pipeline_thread(run_id: str, concept: str, config_dict: dict):
+def run_pipeline_thread(run_id: str, concept: str, doi: str | None, config_dict: dict):
     """Execute the pipeline in a background thread with web HITL gates."""
     from core.orchestrator import Orchestrator
 
@@ -309,15 +335,16 @@ def run_pipeline_thread(run_id: str, concept: str, config_dict: dict):
 
     config_dict["_progress_callback"] = emit_progress
 
-    def on_tracing_complete(tracing_results, seed_paper):
+    def on_tracing_complete(tracing_results, seed_paper, concept_at_depth=None):
         """Called by orchestrator when tracing is done, before synthesis."""
         results_dicts = [r.dict() for r in tracing_results]
         seed_dict = seed_paper.dict() if seed_paper else None
-        run_store.set_tracing_results(run_id, results_dicts, seed_dict)
+        run_store.set_tracing_results(run_id, results_dicts, seed_dict, concept_at_depth)
 
     config_dict["_tracing_complete_callback"] = on_tracing_complete
 
-    emit_progress(f"Starting pipeline for concept: \"{concept}\"")
+    display = f"DOI: {doi}" if doi else f"concept: \"{concept}\""
+    emit_progress(f"Starting pipeline for {display}")
 
     try:
         # Create orchestrator with web HITL gate
@@ -339,7 +366,7 @@ def run_pipeline_thread(run_id: str, concept: str, config_dict: dict):
         orchestrator._wrap_node = stage_tracking_wrap
         orchestrator.graph = orchestrator._build_graph()
 
-        final_state = orchestrator.run(concept)
+        final_state = orchestrator.run(concept, input_doi=doi)
 
         if final_state.stage == PipelineStage.DONE:
             emit_progress("Pipeline completed successfully.")
@@ -386,7 +413,8 @@ app.add_middleware(
 
 # ── API Models ──────────────────────────────────────────────────────────────
 class StartRunRequest(BaseModel):
-    concept: str
+    concept: Optional[str] = None
+    doi: Optional[str] = None
     depth: Optional[int] = None
     papers_per_level: Optional[int] = None
 
@@ -394,12 +422,19 @@ class StartRunRequest(BaseModel):
 class GateResponse(BaseModel):
     action: str  # "approve" or "reject"
     selected_index: Optional[int] = None  # For gate 1 only
+    selected_indices: Optional[list[int]] = None  # For concept selection gate
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 @app.post("/api/runs", response_model=RunInfo)
 async def start_run(req: StartRunRequest):
     """Start a new concept genealogy pipeline run."""
+    # Validate: either concept or doi must be provided
+    if not req.concept and not req.doi:
+        raise HTTPException(status_code=400, detail="Either 'concept' or 'doi' must be provided.")
+    if req.concept and req.doi:
+        raise HTTPException(status_code=400, detail="Provide either 'concept' or 'doi', not both.")
+
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
     config = load_config()
@@ -409,11 +444,12 @@ async def start_run(req: StartRunRequest):
     if req.papers_per_level is not None:
         config_dict["papers_per_level"] = req.papers_per_level
 
-    info = run_store.create_run(run_id, req.concept)
+    display_name = req.concept if req.concept else f"DOI: {req.doi}"
+    info = run_store.create_run(run_id, display_name)
 
     thread = threading.Thread(
         target=run_pipeline_thread,
-        args=(run_id, req.concept, config_dict),
+        args=(run_id, req.concept or "", req.doi, config_dict),
         daemon=True,
     )
     thread.start()
@@ -463,110 +499,91 @@ async def get_graph(run_id: str):
     """
     Build a concept genealogy graph from the tracing results.
 
-    Returns nodes (papers + concepts) and edges showing how depth-0 concepts
-    are traced through the reference chain. Only concepts that appear in at
-    least one reference paper (depth > 0) are included — concepts without
-    cross-paper traceability are irrelevant for genealogy purposes.
+    Returns nodes (papers at each depth) and edges showing the actual citation
+    chain — which paper's references led to which traced paper. This accurately
+    represents the BFS traversal the pipeline performed.
     """
     info = run_store.get_run(run_id)
     if not info:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    tracing_results, seed_paper = run_store.get_tracing_results(run_id)
+    tracing_results, seed_paper, concept_at_depth = run_store.get_tracing_results(run_id)
     if not tracing_results:
-        return {"nodes": [], "edges": [], "concepts": []}
-
-    # Collect all concepts from depth 0 claims
-    depth0_concepts: set[str] = set()
-    for result in tracing_results:
-        if result.get("depth", -1) == 0:
-            for claim in result.get("claims", []):
-                for concept in claim.get("relevant_concepts", []):
-                    depth0_concepts.add(concept.lower().strip())
-
-    # Determine which depth-0 concepts also appear in reference papers (depth > 0)
-    concepts_in_refs: set[str] = set()
-    for result in tracing_results:
-        if result.get("depth", -1) > 0:
-            for claim in result.get("claims", []):
-                for concept in claim.get("relevant_concepts", []):
-                    c_lower = concept.lower().strip()
-                    if c_lower in depth0_concepts:
-                        concepts_in_refs.add(c_lower)
-
-    # Only track concepts that have at least one reference paper connection
-    tracked_concepts = concepts_in_refs
+        return {"nodes": [], "edges": [], "concept_at_depth": {}}
 
     nodes = []
     edges = []
-    paper_ids_added = set()
+    paper_ids_added: set[str] = set()
+
+    # Build a set of all traced paper IDs for edge resolution
+    traced_paper_ids = {r["paper_id"] for r in tracing_results}
 
     # Add seed paper as root node
     if seed_paper:
+        seed_id = seed_paper["paper_id"]
         nodes.append({
-            "id": seed_paper["paper_id"],
-            "type": "paper",
+            "id": seed_id,
+            "type": "seed",
             "label": seed_paper.get("title", "Seed Paper"),
+            "authors": seed_paper.get("authors", []),
+            "doi": seed_paper.get("doi"),
             "depth": 0,
             "year": seed_paper.get("year"),
+            "claims_count": 0,
         })
-        paper_ids_added.add(seed_paper["paper_id"])
+        paper_ids_added.add(seed_id)
 
-    # Process each tracing result — add paper nodes and collect edges
-    paper_concept_edges = []  # (paper_id, concept, depth)
+    # Process each tracing result — add paper nodes
     for result in tracing_results:
         paper_id = result["paper_id"]
         depth = result.get("depth", 0)
+        claims = result.get("claims", [])
 
-        # Find which tracked concepts appear in this paper's claims
-        paper_concepts = set()
-        for claim in result.get("claims", []):
-            for concept in claim.get("relevant_concepts", []):
-                c_lower = concept.lower().strip()
-                if c_lower in tracked_concepts:
-                    paper_concepts.add(c_lower)
-
-        # Only include non-seed papers if they share at least one tracked concept
-        if depth > 0 and not paper_concepts:
-            continue
-
-        # Add paper node if not already present
         if paper_id not in paper_ids_added:
             nodes.append({
                 "id": paper_id,
-                "type": "paper",
+                "type": "seed" if depth == 0 else "reference",
                 "label": result.get("paper_title", paper_id),
+                "authors": result.get("authors", []),
+                "doi": result.get("doi"),
                 "depth": depth,
+                "year": result.get("year"),
+                "claims_count": len(claims),
             })
             paper_ids_added.add(paper_id)
 
-        for concept in paper_concepts:
-            paper_concept_edges.append((paper_id, concept, depth))
+        # Update claims count for seed paper
+        if depth == 0 and seed_paper and paper_id == seed_paper["paper_id"]:
+            for node in nodes:
+                if node["id"] == paper_id:
+                    node["claims_count"] = len(claims)
 
-    # Add concept nodes
-    for concept in sorted(tracked_concepts):
-        concept_id = f"concept:{concept}"
-        nodes.append({
-            "id": concept_id,
-            "type": "concept",
-            "label": concept,
-        })
+    # Build edges from the citation chain: if paper A at depth N has
+    # paper B in its references_explored, and paper B was traced at depth N+1,
+    # then add edge A -> B
+    # Map paper_id -> depth for concept labelling
+    paper_depth_map = {r["paper_id"]: r.get("depth", 0) for r in tracing_results}
 
-    # Add directed edges following genealogy flow:
-    #   Seed Paper -> Concept -> Reference Paper
-    # depth 0 papers introduce the concept (paper -> concept)
-    # depth > 0 papers are traced FROM the concept (concept -> paper)
-    for paper_id, concept, depth in paper_concept_edges:
-        concept_id = f"concept:{concept}"
-        if depth == 0:
-            edges.append({"source": paper_id, "target": concept_id})
-        else:
-            edges.append({"source": concept_id, "target": paper_id})
+    for result in tracing_results:
+        parent_id = result["paper_id"]
+        parent_depth = result.get("depth", 0)
+        refs_explored = result.get("references_explored", [])
+
+        for ref_id in refs_explored:
+            if ref_id in traced_paper_ids and ref_id in paper_ids_added:
+                # Edge concept = the concept active at the target's depth
+                target_depth = paper_depth_map.get(ref_id, parent_depth + 1)
+                edge_concept = concept_at_depth.get(str(target_depth)) or concept_at_depth.get(target_depth) or info.user_concept
+                edges.append({
+                    "source": parent_id,
+                    "target": ref_id,
+                    "concept": edge_concept,
+                })
 
     return {
         "nodes": nodes,
         "edges": edges,
-        "concepts": sorted(tracked_concepts),
+        "concept_at_depth": concept_at_depth,
     }
 
 

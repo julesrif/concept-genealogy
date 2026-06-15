@@ -29,6 +29,9 @@ class PipelineStage(str, Enum):
     """Explicit stage enumeration keeps routing logic readable and prevents
     string typos from silently misrouting the graph."""
     INIT = "init"
+    VALIDATING_DOI = "validating_doi"
+    EXTRACTING_CONCEPTS = "extracting_concepts"
+    AWAITING_CONCEPT_SELECTION = "awaiting_concept_selection"
     RETRIEVING = "retrieving"
     AWAITING_SEED_APPROVAL = "awaiting_seed_approval"
     TRACING = "tracing"
@@ -52,6 +55,7 @@ class CandidatePaper(BaseModel):
     sjr_score: Optional[float] = None
     open_access_url: Optional[str] = None
     abstract: Optional[str] = None
+    doi: Optional[str] = None
 
 
 class ExtractedClaim(BaseModel):
@@ -100,6 +104,8 @@ class TracingResult(BaseModel):
     paper_id: str
     paper_title: str
     depth: int
+    authors: list[str] = Field(default_factory=list)
+    doi: Optional[str] = None
     claims: list[EvaluatedClaim] = Field(default_factory=list)
     references_explored: list[str] = Field(default_factory=list)
     references_discarded: list[str] = Field(default_factory=list)
@@ -127,6 +133,13 @@ class PipelineState(BaseModel):
     user_concept: str = ""
     error_message: Optional[str] = None
 
+    # DOI input mode: when a DOI is provided directly, it becomes the seed paper
+    # and the user selects up to 3 concepts to trace (instead of searching for a seed)
+    input_doi: Optional[str] = None
+    doi_mode: bool = False  # True when running in DOI input mode
+    extracted_concepts: list[str] = Field(default_factory=list)  # concepts extracted from DOI paper
+    selected_concepts: list[str] = Field(default_factory=list)  # user-selected concepts to trace (max 3)
+
     # Retrieval
     candidate_papers: list[CandidatePaper] = Field(default_factory=list)
     selected_seed: Optional[CandidatePaper] = None
@@ -140,6 +153,11 @@ class PipelineState(BaseModel):
     tracing_results: list[TracingResult] = Field(default_factory=list)
     # BFS queue: paper IDs to trace at the current depth level
     pending_papers_at_depth: list[str] = Field(default_factory=list)
+    # Concept abstraction: tracks how the concept evolves/abstracts at each depth
+    # Key = depth, Value = the abstracted precursor concept at that level.
+    # At depth 0 this equals user_concept. At deeper levels the system identifies
+    # the ancestral/precursor terminology that predates the modern concept name.
+    concept_at_depth: dict[int, str] = Field(default_factory=dict)
 
     # Synthesis
     synthesis_text: Optional[str] = None

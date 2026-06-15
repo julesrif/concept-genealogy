@@ -85,28 +85,54 @@ class CitationExtractorAgent:
         self.groq = config.get("_groq_client")  # shared rate-limited client
         self.model = config.get("groq_model_fast", "llama-3.1-8b-instant")
         self.max_text_chars = 8000  # ~2000 tokens; keeps within context window safely
+        self._init_elsevier(config)
+
+    def _init_elsevier(self, config: dict[str, Any]) -> None:
+        """Initialize Elsevier client if API key is available."""
+        from agents.elsevier_client import ElsevierClient
+        elsevier_key = config.get("elsevier_api_key", "")
+        self.elsevier = ElsevierClient(elsevier_key) if elsevier_key else None
 
     def run(self, paper: CandidatePaper, depth: int) -> list[ExtractedClaim]:
         """
         Main entry point. Returns extracted claims for a paper at a given depth.
 
-        Extraction strategy:
+        Extraction strategy (fallback chain):
           1. If open_access_url is available -> download PDF -> extract full text
-          2. Otherwise -> use abstract (flagged as low confidence)
-          3. Call Groq LLM with extraction prompt
-          4. Inspector validates JSON output (called from Orchestrator after return)
+          2. If DOI is available and Elsevier key configured -> fetch via Elsevier API
+          3. Otherwise -> use abstract (flagged as low confidence)
+          4. Call Groq LLM with extraction prompt
+          5. Inspector validates JSON output (called from Orchestrator after return)
         """
         logger.info(
-            "CitationExtractor: processing paper '%s' (depth=%d, oa=%s)",
-            paper.title, depth, bool(paper.open_access_url)
+            "CitationExtractor: processing paper '%s' (depth=%d, oa=%s, doi=%s)",
+            paper.title, depth, bool(paper.open_access_url), paper.doi or "none"
         )
 
+        text = ""
+        confidence = 0.5
+
+        # Strategy 1: Open-access PDF
         if paper.open_access_url:
             text, confidence = self._extract_from_pdf(paper.open_access_url)
-        else:
+
+        # Strategy 2: Elsevier full-text via DOI
+        if not text.strip() and paper.doi and self.elsevier:
+            logger.info("CitationExtractor: trying Elsevier for DOI '%s'", paper.doi)
+            elsevier_text = self.elsevier.get_full_text(paper.doi)
+            if elsevier_text:
+                text = elsevier_text[:self.max_text_chars]
+                confidence = 1.0
+                logger.info(
+                    "CitationExtractor: Elsevier provided %d chars for '%s'",
+                    len(text), paper.title
+                )
+
+        # Strategy 3: Abstract-only fallback
+        if not text.strip():
             text = paper.abstract or ""
-            confidence = 0.5  # abstract-only; design proposal flags as "low confidence"
-            logger.info("CitationExtractor: no OA PDF for '%s' - using abstract only", paper.title)
+            confidence = 0.5
+            logger.info("CitationExtractor: no full text for '%s' - using abstract only", paper.title)
 
         if not text.strip():
             logger.warning("CitationExtractor: no extractable text for paper '%s'", paper.title)

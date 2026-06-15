@@ -125,21 +125,31 @@ class EvaluatorAgent:
 
         Returns only claims that pass the relevance filter, with validity scores
         and (optionally) drift scores attached.
+
+        Uses the depth-specific abstracted concept for relevance evaluation.
+        At depth 0, this is the user's original concept. At deeper levels, it
+        is the precursor concept identified by the Orchestrator's concept
+        abstraction step, allowing relevance matching against older terminology.
         """
         if not raw_claims:
             return []
+
+        # Use abstracted concept for this depth level, falling back to user_concept
+        active_concept = state.concept_at_depth.get(
+            state.current_depth, state.user_concept
+        )
 
         total = len(raw_claims)
         evaluated: list[EvaluatedClaim] = []
         for idx, claim in enumerate(raw_claims, 1):
             logger.debug("Evaluating claim %d/%d", idx, total)
-            result = self._evaluate_claim(claim, state.user_concept, state.current_depth)
+            result = self._evaluate_claim(claim, active_concept, state.current_depth)
             if result is not None:
                 evaluated.append(result)
 
         logger.info(
-            "Evaluator: %d/%d claims passed relevance filter for concept='%s'",
-            len(evaluated), len(raw_claims), state.user_concept
+            "Evaluator: %d/%d claims passed relevance filter for concept='%s' (depth=%d)",
+            len(evaluated), len(raw_claims), active_concept, state.current_depth
         )
         return evaluated
 

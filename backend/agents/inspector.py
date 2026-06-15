@@ -138,6 +138,8 @@ class InspectorAgent:
                 paper_id=paper.paper_id,
                 paper_title=paper.title,
                 depth=depth,
+                authors=paper.authors,
+                doi=paper.doi,
                 claims=evaluated_claims,
                 references_explored=[],  # populated by CitationExtractor
             )
@@ -154,6 +156,8 @@ class InspectorAgent:
                 paper_id=paper.paper_id,
                 paper_title=paper.title,
                 depth=depth,
+                authors=paper.authors,
+                doi=paper.doi,
                 claims=[],
             )
 

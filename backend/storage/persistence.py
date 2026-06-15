@@ -100,6 +100,25 @@ class PersistenceLayer:
         )
         self.output_dir = Path(config.get("output_dir", "output"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self._init_embedding_model()
+
+    def _init_embedding_model(self) -> None:
+        """
+        Initialise Sentence-BERT for pgvector embedding population.
+
+        Uses all-mpnet-base-v2 (768 dimensions) matching the vector(768) column
+        in the schema. Gracefully degrades if sentence-transformers is unavailable.
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.embedding_model = SentenceTransformer("all-mpnet-base-v2")
+            logger.info("Persistence: embedding model loaded for pgvector population")
+        except ImportError:
+            logger.info(
+                "Persistence: sentence-transformers not installed — "
+                "pgvector embeddings will not be populated"
+            )
+            self.embedding_model = None
 
     def save(self, state: PipelineState) -> str:
         """
@@ -210,6 +229,7 @@ class PersistenceLayer:
                               (run_id, paper_id, paper_title, depth, claim_text,
                                validity_score, drift_score, relevant_concepts)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            RETURNING claim_id
                             """,
                             (
                                 run_id,
@@ -223,9 +243,75 @@ class PersistenceLayer:
                             )
                         )
 
+                # Populate pgvector embeddings for all claims in this run
+                self._populate_embeddings(cur, run_id)
+
             conn.commit()
         finally:
             conn.close()
+
+    def _populate_embeddings(self, cur, run_id: str) -> None:
+        """
+        Compute and store sentence embeddings for all claims in a run.
+
+        Uses all-mpnet-base-v2 (768d) to produce dense vectors stored in the
+        pgvector `embedding` column. These enable semantic similarity search
+        across claims (e.g. "find claims semantically similar to X").
+
+        Batch-encodes all claims for efficiency, then updates each row.
+        Gracefully skips if:
+          - No embedding model available (sentence-transformers not installed)
+          - The embedding column doesn't exist (pgvector extension not available)
+        """
+        if self.embedding_model is None:
+            return
+
+        try:
+            # Check if embedding column exists (pgvector may not be installed)
+            cur.execute("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'traced_claims' AND column_name = 'embedding'
+            """)
+            if not cur.fetchone():
+                logger.debug("Persistence: embedding column not found — skipping")
+                return
+
+            # Fetch all claims for this run that need embeddings
+            cur.execute(
+                """
+                SELECT claim_id, claim_text FROM traced_claims
+                WHERE run_id = %s AND embedding IS NULL
+                """,
+                (run_id,)
+            )
+            rows = cur.fetchall()
+            if not rows:
+                return
+
+            claim_ids = [r[0] for r in rows]
+            claim_texts = [r[1] for r in rows]
+
+            # Batch encode for efficiency (all claims at once)
+            embeddings = self.embedding_model.encode(
+                claim_texts, convert_to_numpy=True, show_progress_bar=False
+            )
+
+            # Update each claim with its embedding
+            for claim_id, embedding in zip(claim_ids, embeddings):
+                # pgvector expects a list of floats as the vector value
+                vec_str = "[" + ",".join(str(float(x)) for x in embedding) + "]"
+                cur.execute(
+                    "UPDATE traced_claims SET embedding = %s WHERE claim_id = %s",
+                    (vec_str, claim_id)
+                )
+
+            logger.info(
+                "Persistence: populated %d pgvector embeddings for run %s",
+                len(claim_ids), run_id
+            )
+        except Exception as e:
+            # Non-fatal: embeddings are a stretch goal, don't block persistence
+            logger.warning("Persistence: embedding population failed: %s", e)
 
     @staticmethod
     def _write_markdown(state: PipelineState, run_id: str, path: Path) -> None:

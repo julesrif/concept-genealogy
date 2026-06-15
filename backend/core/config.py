@@ -55,6 +55,12 @@ class Config(BaseSettings):
     semantic_scholar_api_key: str = Field(default="", env="SEMANTIC_SCHOLAR_API_KEY")
     semantic_scholar_base_url: str = "https://api.semanticscholar.org/graph/v1"
 
+    # ── Elsevier API (ScienceDirect / Scopus) ──────────────────────────────────
+    # Institutional API key for full-text retrieval of non-OA papers.
+    # Allows data mining under academic license (no storage of PDFs).
+    # Source: https://dev.elsevier.com/
+    elsevier_api_key: str = Field(default="", env="ELSEVIER_API_KEY")
+
     # ── Pipeline constraints ───────────────────────────────────────────────────
     max_depth: int = Field(default=3, env="MAX_DEPTH")
     max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
@@ -64,7 +70,7 @@ class Config(BaseSettings):
     # Downloaded from: https://www.scimagojr.com/journalrank.php
     # Kept local to avoid runtime HTTP dependency for ranking (design proposal 7)
     sjr_csv_path: str = Field(
-        default="data/sjr_dataset.csv",
+        default="data/scimagojr2025.csv",
         env="SJR_CSV_PATH"
     )
 
