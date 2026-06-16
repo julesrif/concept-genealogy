@@ -1,3 +1,17 @@
+<!--
+  App.vue — Root application shell.
+
+  Design decisions:
+  - Vue 3 Composition API (<script setup>) chosen over Options API for co-located
+    reactive state, better TypeScript inference, and reduced boilerplate (Vue RFC-0040).
+  - Single <router-view> slot follows the Single Page Application pattern — all views
+    render inside this shell, preserving persistent header/nav across navigation.
+  - CSS custom properties (design tokens) defined here at :root scope to enforce a
+    consistent design system across all child components without a heavyweight UI library.
+  - No global state store (Vuex/Pinia) — each view fetches its own data via REST calls;
+    this keeps the architecture simple and avoids stale-cache bugs for a HITL pipeline
+    whose state mutates server-side between polls.
+-->
 <template>
   <div id="app">
     <header class="app-header">

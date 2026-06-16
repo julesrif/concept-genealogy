@@ -388,8 +388,85 @@ This mode is designed for researchers who start from a specific paper they know 
 
 ---
 
+## Technology Stack & Acknowledgments
+
+All external libraries, frameworks, and models used in this project are acknowledged below with their purpose and license.
+
+### Backend (Python 3.12)
+
+| Library | Version | Purpose | License |
+|---------|---------|---------|---------|
+| **FastAPI** | ≥0.115 | Async REST API framework for HITL gate endpoints and pipeline control | MIT |
+| **Uvicorn** | ≥0.30 | ASGI server for FastAPI | BSD-3-Clause |
+| **LangGraph** | ≥0.2 | StateGraph execution engine enabling cyclic workflows for HITL loops and recursive citation tracing (Sapkota et al., 2025) | MIT |
+| **LangChain-Core** | ≥0.3 | Foundation dependency for LangGraph's state management primitives | MIT |
+| **Groq** | ≥0.9 | Python client for Groq LPU inference API (Groq, 2025a) — hosts Llama 3.1/3.3 models | Apache-2.0 |
+| **PyMuPDF (fitz)** | ≥1.24 | PDF text extraction with high fidelity for multi-column academic layouts (Artifex Software, 2026) | AGPL-3.0 |
+| **httpx** | ≥0.27 | HTTP client for Semantic Scholar, CrossRef, and Elsevier API calls (sync mode for LangGraph compatibility) | BSD-3-Clause |
+| **Pydantic** | ≥2.7 | Data validation and schema enforcement at agent boundaries (Atıl et al., 2025) | MIT |
+| **Pydantic-Settings** | ≥2.3 | Environment variable loading and validation | MIT |
+| **psycopg2-binary** | ≥2.9 | PostgreSQL adapter for claims persistence and pgvector operations | LGPL-3.0 |
+| **sentence-transformers** | ≥3.0 | Embedding model (`all-mpnet-base-v2`, 768d) for semantic drift detection (Reimers and Gurevych, 2019) | Apache-2.0 |
+| **pytest** | ≥8.0 | Test framework for unit and integration tests | MIT |
+| **pytest-cov** | ≥5.0 | Coverage measurement integrated with pytest | MIT |
+
+### Frontend (Node.js 18+)
+
+| Library | Version | Purpose | License |
+|---------|---------|---------|---------|
+| **Vue 3** | ≥3.5 | Reactive SPA framework for HITL gate UI and pipeline monitoring | MIT |
+| **Vue Router** | ≥4.5 | Client-side routing (HomeView, RunView, HistoryView, ResultView) | MIT |
+| **Vite** | ≥6.3 | Build tool and development server with HMR | MIT |
+| **v-network-graph** | ≥0.9 | Interactive graph visualisation component for the genealogy DAG | MIT |
+| **dagre** | ^0.8.5 | Hierarchical graph layout algorithm for depth-based node positioning | MIT |
+
+### Infrastructure
+
+| Technology | Purpose | License |
+|------------|---------|---------|
+| **PostgreSQL 16** | Relational storage for claims, run metadata, and pgvector embeddings | PostgreSQL License |
+| **pgvector** | Vector similarity search extension for PostgreSQL (pgvector, 2021) | PostgreSQL License |
+| **Docker / Docker Compose** | Containerised deployment of database, backend, and frontend | Apache-2.0 |
+
+### LLM Models (via Groq API)
+
+| Model | Parameters | Usage | Provider |
+|-------|-----------|-------|----------|
+| **Llama 3.1 8B Instant** | 8B | Citation Extractor, Evaluator, concept abstraction (fast, classification tasks) | Meta (Llama 3.1 Community License) via Groq |
+| **Llama 3.3 70B Versatile** | 70B | Synthesiser, Challenger (comparative reasoning requiring larger context) | Meta (Llama 3.3 Community License) via Groq |
+
+### External APIs
+
+| API | Purpose | Authentication |
+|-----|---------|---------------|
+| **Semantic Scholar API** | Paper search, metadata retrieval, reference resolution (AI2, 2023) | Optional API key (raises rate limits) |
+| **CrossRef API** | Reference DOI retrieval from publisher-deposited metadata; DOI validation | No authentication required |
+| **Elsevier Article Retrieval API** | Full-text extraction for non-OA papers via institutional DOI-based access | Elsevier API key (institutional) |
+
+### Data Assets
+
+| Asset | Source | Purpose |
+|-------|--------|---------|
+| **scimagojr2025.csv** | SCImago Journal & Country Rank (n.d.) | Local SJR journal ranking for deterministic reference prioritisation |
+
+---
+
+## Testing
+
+Test suite output and coverage reports are saved in `backend/test-output/` for submission. To regenerate:
+
+```bash
+cd backend
+.venv\Scripts\python.exe -m pytest tests/ -v --tb=short > test-output/test-results.txt 2>&1
+.venv\Scripts\python.exe -m pytest tests/ --cov=. --cov-report=term-missing > test-output/coverage-report.txt 2>&1
+```
+
+---
+
 ## References
 
+- AI2 (2023) Semantic Scholar API License Agreement. Available at: https://www.semanticscholar.org/product/api/license.
+- Artifex Software, Inc. (2026) PyMuPDF. Available at: https://github.com/pymupdf/PyMuPDF.
 - Atıl, B., et al. (2025) Non-determinism of "deterministic" LLM system settings in hosted environments. *Proceedings of the 5th Workshop on Evaluation and Comparison of NLP Systems*, pp. 135-148. doi:10.18653/v1/2025.eval4nlp-1.12.
 - Bratman, M.E., Israel, D.J. & Pollack, M.E. (1988) Plans and resource-bounded practical reasoning. *Computational Intelligence*, 4(4), 349-355.
 - Brooks, R.A. (1991) Intelligence without representation. *Artificial Intelligence*, 47(1-3), 139-159.

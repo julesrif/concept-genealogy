@@ -1,3 +1,22 @@
+<!--
+  RunView.vue — Live pipeline monitor with HITL gate interaction.
+
+  Design decisions:
+  - Polling (setInterval 2 s) chosen over WebSockets because: (a) the LangGraph pipeline
+    advances in discrete steps with multi-second latency between stages, making push
+    unnecessary; (b) polling is simpler to implement behind reverse proxies and load
+    balancers; (c) reconnection logic for WebSocket adds complexity disproportionate
+    to the update frequency (Russell & Norvig, 2021 — simplicity principle).
+  - Pipeline progress bar renders all stages declaratively from a static list, with
+    CSS classes toggled by comparing the current run stage — avoids imperative DOM
+    manipulation and leverages Vue's reactive rendering.
+  - HITL gate cards render conditionally (v-if on gate_type) so only the active gate
+    is shown; this prevents user confusion and enforces the sequential gate protocol
+    defined in the orchestrator (Mosqueira-Rey et al., 2023).
+  - Gate approval/rejection POSTs update server state and then re-poll immediately,
+    ensuring the UI reflects the new pipeline state without waiting for the next
+    polling interval.
+-->
 <template>
   <div class="run-view">
     <div v-if="!run" class="card loading-card">

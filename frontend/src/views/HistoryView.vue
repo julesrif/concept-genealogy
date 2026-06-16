@@ -1,3 +1,15 @@
+<!--
+  HistoryView.vue — List of completed pipeline runs.
+
+  Design decisions:
+  - Fetches completed outputs from the /outputs endpoint (file-system backed) rather
+    than maintaining a client-side run registry — the backend's output/ directory is
+    the single source of truth, avoiding sync issues.
+  - Each item links to ResultView via run_id, enabling deep-linking and browser
+    back/forward navigation through vue-router's history mode.
+  - No pagination implemented because the expected usage is academic (tens of runs,
+    not thousands); adding virtual scrolling would be premature optimisation.
+-->
 <template>
   <div class="history">
     <h2>Run History</h2>

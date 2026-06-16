@@ -1,3 +1,16 @@
+<!--
+  HomeView.vue — Pipeline launch form (concept or DOI input).
+
+  Design decisions:
+  - Dual input mode (concept keyword vs. DOI) accommodates two user workflows identified
+    in the DPD: exploratory search and targeted paper-first tracing.
+  - Form validation is minimal and client-side (non-empty check) because the backend's
+    Pydantic model performs authoritative validation — avoids duplicating business rules.
+  - On successful POST the user is redirected to RunView via vue-router's programmatic
+    navigation (router.push) rather than a page reload, preserving SPA responsiveness.
+  - Loading state disables the submit button to prevent duplicate pipeline launches
+    (idempotency guard at the UI layer).
+-->
 <template>
   <div class="home">
     <div class="hero">
