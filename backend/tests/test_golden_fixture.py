@@ -3,7 +3,7 @@ tests/test_golden_fixture.py - Integration test using golden fixture data.
 
 Tests the Inspector → Evaluator → TracingResult pipeline with known-good
 golden fixture data (5 claims from "Attention Is All You Need"). No network
-calls are made — all dependencies are mocked.
+calls are made - all dependencies are mocked.
 
 Implementation plan coverage: Week 3 (Integration / golden path tests)
 """

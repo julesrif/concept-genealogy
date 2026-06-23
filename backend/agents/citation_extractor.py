@@ -2,7 +2,7 @@
 agents/citation_extractor.py - Citation Extractor agent.
 
 ROLE IN ARCHITECTURE:
-Reactive specialist agent. Receives an approved seed paper and returns extracted
+Stateless worker node. Receives an approved seed paper and returns extracted
 inline citations, reference chains, and raw claims. No access to global state.
 
 RESPONSIBILITIES:
@@ -85,6 +85,7 @@ class CitationExtractorAgent:
         self.groq = config.get("_groq_client")  # shared rate-limited client
         self.model = config.get("groq_model_fast", "llama-3.1-8b-instant")
         self.max_text_chars = 8000  # ~2000 tokens; keeps within context window safely
+        self.abstract_confidence = float(config.get("abstract_confidence", 0.5))
         self._init_elsevier(config)
 
     def _init_elsevier(self, config: dict[str, Any]) -> None:
@@ -110,11 +111,11 @@ class CitationExtractorAgent:
         )
 
         text = ""
-        confidence = 0.5
+        confidence = self.abstract_confidence
 
         # Strategy 1: Open-access PDF
         if paper.open_access_url:
-            text, confidence = self._extract_from_pdf(paper.open_access_url)
+            text, confidence = self._extract_from_pdf(paper.open_access_url, paper.title)
 
         # Strategy 2: Elsevier full-text via DOI
         if not text.strip() and paper.doi and self.elsevier:
@@ -131,8 +132,12 @@ class CitationExtractorAgent:
         # Strategy 3: Abstract-only fallback
         if not text.strip():
             text = paper.abstract or ""
-            confidence = 0.5
-            logger.info("CitationExtractor: no full text for '%s' - using abstract only", paper.title)
+            confidence = self.abstract_confidence
+            logger.info(
+                "CitationExtractor: no full text for '%s' - using abstract only "
+                "(confidence=%.2f). Full text unavailable via PDF or Elsevier.",
+                paper.title, confidence
+            )
 
         if not text.strip():
             logger.warning("CitationExtractor: no extractable text for paper '%s'", paper.title)
@@ -141,7 +146,7 @@ class CitationExtractorAgent:
         raw_claims = self._llm_extract_claims(text, paper.title)
         return self._to_typed_claims(raw_claims, paper, depth, confidence)
 
-    def _extract_from_pdf(self, pdf_url: str) -> tuple[str, float]:
+    def _extract_from_pdf(self, pdf_url: str, title: str = "") -> tuple[str, float]:
         """
         Download PDF and extract text using PyMuPDF.
 
@@ -184,13 +189,26 @@ class CitationExtractorAgent:
             return truncated, 1.0
 
         except ImportError:
-            logger.error("PyMuPDF not installed. Run: pip install pymupdf")
+            logger.error(
+                "Unable to parse PDF for '%s': PyMuPDF not installed. "
+                "Continuing with remaining extraction strategies. "
+                "Run: pip install pymupdf",
+                title,
+            )
             return "", 0.0
         except httpx.HTTPStatusError as e:
-            logger.warning("PDF download failed for %s: %s", pdf_url, e)
+            logger.warning(
+                "Unable to parse PDF for '%s': HTTP %d from %s. "
+                "Continuing with remaining extraction strategies.",
+                title, e.response.status_code, pdf_url,
+            )
             return "", 0.0
         except Exception as e:
-            logger.warning("PDF extraction failed: %s", e)
+            logger.warning(
+                "Unable to parse PDF for '%s': %s. "
+                "Continuing with remaining extraction strategies.",
+                title, e,
+            )
             return "", 0.0
 
     def _llm_extract_claims(self, text: str, title: str) -> list[dict]:
@@ -247,7 +265,7 @@ class CitationExtractorAgent:
         Pydantic validation of ExtractedClaim happens in the Inspector, not here.
         The Extractor is responsible for producing output; validation is the
         Inspector's domain. This separation keeps each agent's scope minimal
-        (subsumption architecture principle - Brooks, 1991).
+        (stateless worker principle - single-responsibility design).
         """
         claims: list[ExtractedClaim] = []
         for raw in raw_claims:

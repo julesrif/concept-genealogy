@@ -15,10 +15,11 @@ sharing are managed by this Orchestrator via the evolving global PipelineState
 (Dang et al., 2025). This isolates failures at the agent boundary level and
 prevents a single misbehaving agent from corrupting another agent's context window.
 
-Architecture classification: hybrid deliberative-reactive (Stone and Veloso, 2000).
+Architecture classification: hybrid deliberative-stateless (Stone and Veloso, 2000).
 This file implements the deliberative layer (global state, intention persistence,
 resource-bounded practical reasoning - Bratman et al., 1988).
-The agents in /agents/ implement the reactive layer (stateless, respond to inputs).
+The agents in /agents/ implement the stateless worker layer (no global state access,
+single-responsibility nodes that process their input slice and return typed output).
 
 References:
   Bratman et al. (1988) Plans and resource-bounded practical reasoning.
@@ -163,19 +164,19 @@ class Orchestrator:
         # After tracing completes -> synthesise
         graph.add_edge("synthesise", "hitl_gate_2")
 
-        # HITL Gate 2: approved -> challenge; rejected -> re-synthesise
+        # HITL Gate 2: approved -> challenge; rejected -> re-synthesise (or persist if retry cap hit)
         graph.add_conditional_edges(
             "hitl_gate_2",
-            lambda state: "challenge" if state.get("hitl_gate_2_approved") else "synthesise",
+            self._route_after_synthesis_review,
         )
 
         # Challenge -> HITL Gate 3
         graph.add_edge("challenge", "hitl_gate_3")
 
-        # HITL Gate 3: approved -> persist; rejected -> re-synthesise (reset loop)
+        # HITL Gate 3: approved -> persist; rejected -> re-challenge (or persist if retry cap hit)
         graph.add_conditional_edges(
             "hitl_gate_3",
-            lambda state: "persist" if state.get("hitl_gate_3_approved") else "synthesise",
+            self._route_after_final_review,
         )
 
         # Persist -> done
@@ -198,7 +199,7 @@ class Orchestrator:
         """
         Routing logic for the breadth-first citation tracing loop.
 
-        PURE ROUTING FUNCTION — does NOT modify state. All state mutations
+        PURE ROUTING FUNCTION - does NOT modify state. All state mutations
         happen inside nodes (where _wrap_node serialises them back to the
         LangGraph state dict). Mutating state here has no effect because
         LangGraph passes a copy to conditional edge functions.
@@ -226,7 +227,7 @@ class Orchestrator:
         if pending:
             return "trace_citation"
 
-        # Current depth level is exhausted — check if next level has refs
+        # Current depth level is exhausted - check if next level has refs
         # Collect refs from papers traced at the most recent depth level
         latest_depth = current_depth - 1  # last completed level
         all_new_refs = []
@@ -263,9 +264,58 @@ class Orchestrator:
             )
             return "hitl_graph_review"
 
-        # There ARE new refs to trace — route back to trace_citation.
+        # There ARE new refs to trace - route back to trace_citation.
         # The node will populate its own queue (state mutation must happen there).
         return "trace_citation"
+
+    def _route_after_synthesis_review(self, state: dict) -> str:
+        """
+        Route after HITL Gate 2 (synthesis review).
+
+        If approved -> advance to challenge.
+        If rejected and retry cap NOT reached -> re-synthesise.
+        If rejected and retry cap reached -> persist with partial_consensus status.
+        """
+        if state.get("hitl_gate_2_approved"):
+            return "challenge"
+        retries = state.get("synthesiser_retries", 0)
+        max_retries = state.get("max_synthesiser_retries", 3)
+        if retries >= max_retries:
+            logger.warning(
+                "Synthesis retry cap reached (%d/%d). "
+                "Persisting with partial_consensus status.",
+                retries, max_retries,
+            )
+            state["synthesis_status"] = "partial_consensus"
+            return "persist"
+        return "synthesise"
+
+    def _route_after_final_review(self, state: dict) -> str:
+        """
+        Route after HITL Gate 3 (final review post-challenge).
+
+        Activity diagram flow: Gate 3 rejection loops back to the Challenger
+        (debate retry), NOT back to Synthesis. The user already approved the
+        synthesis at Gate 2; Gate 3 rejection means the adversarial review
+        needs another pass.
+
+        If approved -> persist.
+        If rejected and debate retry cap NOT reached -> re-challenge.
+        If rejected and debate retry cap reached -> persist with partial_consensus.
+        """
+        if state.get("hitl_gate_3_approved"):
+            return "persist"
+        retries = state.get("challenger_retries", 0)
+        max_retries = state.get("max_challenger_retries", 3)
+        if retries >= max_retries:
+            logger.warning(
+                "Challenger debate retry cap reached (%d/%d) at Gate 3. "
+                "Persisting with partial_consensus status.",
+                retries, max_retries,
+            )
+            state["synthesis_status"] = "partial_consensus"
+            return "persist"
+        return "challenge"
 
     @staticmethod
     def _wrap_node(fn):
@@ -475,7 +525,7 @@ class Orchestrator:
         else:
             # If the queue is empty, populate it from the previous depth's refs.
             # This MUST happen here (in a node) not in the routing function,
-            # because LangGraph routing functions receive a state copy — mutations
+            # because LangGraph routing functions receive a state copy - mutations
             # there are not persisted back to the graph state.
             if not state.pending_papers_at_depth:
                 self._populate_next_depth_queue(state)
@@ -495,7 +545,7 @@ class Orchestrator:
         )
         self._progress(
             f"Depth {state.current_depth}, "
-            f"Paper {articles_at_depth + 1} — \"{target_paper.title}\""
+            f"Paper {articles_at_depth + 1} - \"{target_paper.title}\""
         )
 
         # Extractor -> Evaluator -> Inspector pipeline
@@ -509,11 +559,11 @@ class Orchestrator:
 
         # Fetch the paper's references from Semantic Scholar for the next level
         self._progress("Fetching references...")
-        # Ensure DOI is available for CrossRef lookup — S2 search may not always
+        # Ensure DOI is available for CrossRef lookup - S2 search may not always
         # return externalIds, but individual paper fetch does.
         doi = target_paper.doi
         if not doi and target_paper.paper_id:
-            logger.info("DOI missing on paper %s — fetching from S2 detail endpoint", target_paper.paper_id)
+            logger.info("DOI missing on paper %s - fetching from S2 detail endpoint", target_paper.paper_id)
             detail = self.retriever.fetch_paper_by_id(target_paper.paper_id)
             if detail and detail.doi:
                 doi = detail.doi
@@ -522,7 +572,7 @@ class Orchestrator:
         ref_ids = self.retriever.get_references(target_paper.paper_id, doi=doi)
         validated_result.references_explored = ref_ids
         self._progress(
-            f"Depth {state.current_depth} — "
+            f"Depth {state.current_depth} - "
             f"{len(validated_result.claims)} claims, {len(ref_ids)} references found"
         )
         logger.info(
@@ -575,11 +625,24 @@ class Orchestrator:
         state.stage = PipelineStage.SYNTHESISING
 
         total_claims = sum(len(r.claims) for r in state.tracing_results)
-        self._progress(
-            f"Synthesising genealogy from {total_claims} claims "
-            f"across {len(state.tracing_results)} papers..."
+
+        # On retry, include challenger feedback so the synthesiser addresses the issues
+        feedback = None
+        if state.synthesiser_retries > 0 and state.challenger_critique:
+            feedback = state.challenger_critique
+            self._progress(
+                f"Re-synthesising (attempt {state.synthesiser_retries + 1}) "
+                f"incorporating challenger feedback..."
+            )
+        else:
+            self._progress(
+                f"Synthesising genealogy from {total_claims} claims "
+                f"across {len(state.tracing_results)} papers..."
+            )
+
+        synthesis = self.synthesiser.run(
+            state.tracing_results, state.user_concept, feedback=feedback
         )
-        synthesis = self.synthesiser.run(state.tracing_results, state.user_concept)
         validated = self.inspector.validate_synthesis(synthesis, state)
         state.synthesis_text = validated
         self._progress("Synthesis ready for review.")
@@ -588,22 +651,74 @@ class Orchestrator:
 
     def _node_hitl_gate_2(self, state: PipelineState) -> PipelineState:
         """HITL Gate 2: present synthesis to user, await approval."""
-        approved = self.hitl.gate_2_synthesis_approval(state.synthesis_text)
+        # Build summary of traced papers for display alongside the synthesis
+        tracing_papers = [
+            {
+                "paper_title": r.paper_title,
+                "paper_id": r.paper_id,
+                "authors": r.authors,
+                "depth": r.depth,
+                "doi": r.doi,
+                "num_claims": len(r.claims),
+            }
+            for r in state.tracing_results
+        ]
+        approved = self.hitl.gate_2_synthesis_approval(
+            state.synthesis_text, tracing_papers=tracing_papers
+        )
         state.hitl_gate_2_approved = approved
         if not approved:
             state.synthesiser_retries += 1
         return state
 
     def _node_challenge(self, state: PipelineState) -> PipelineState:
-        """Activate Challenger to interrogate synthesis (adversarial review)."""
+        """Activate Challenger to interrogate synthesis (adversarial review).
+
+        Auto-retries when the Challenger's own recommendation is 'revise',
+        so the user only sees Gate 3 once the critique is as deep as possible.
+        """
         state.stage = PipelineStage.CHALLENGING
-        self._progress("Running adversarial review on synthesis...")
-        critique = self.challenger.run(
-            state.synthesis_text,
-            state.tracing_results,
-            user_concept=state.user_concept,
-        )
-        state.challenger_critique = critique
+        max_auto_retries = 2  # up to 3 total runs (initial + 2 auto-retries)
+        auto_retry = 0
+
+        # On debate retry (manual Gate 3 rejection), seed with previous critique
+        previous_critique = None
+        if state.challenger_retries > 0 and state.challenger_critique:
+            previous_critique = state.challenger_critique
+            self._progress(
+                f"Re-running adversarial review (debate round {state.challenger_retries + 1})..."
+            )
+            state.challenger_critique = None
+            state.challenger_issues = []
+        else:
+            self._progress("Running adversarial review on synthesis...")
+
+        while True:
+            critique = self.challenger.run(
+                state.synthesis_text,
+                state.tracing_results,
+                user_concept=state.user_concept,
+                previous_critique=previous_critique,
+            )
+            state.challenger_critique = critique
+            state.challenger_issues = self.challenger.last_issues
+
+            # Auto-retry if the Challenger itself recommends revision
+            if (
+                self.challenger.last_recommendation == "revise"
+                and auto_retry < max_auto_retries
+            ):
+                auto_retry += 1
+                previous_critique = critique
+                self._progress(
+                    f"Challenger recommends deeper review - auto re-challenge "
+                    f"({auto_retry}/{max_auto_retries})..."
+                )
+                state.challenger_critique = None
+                state.challenger_issues = []
+                continue
+            break
+
         self._progress("Challenge complete. Final review ready.")
         state.stage = PipelineStage.AWAITING_FINAL_APPROVAL
         return state
@@ -611,9 +726,11 @@ class Orchestrator:
     def _node_hitl_gate_3(self, state: PipelineState) -> PipelineState:
         """HITL Gate 3: present final output to user, await final approval."""
         approved = self.hitl.gate_3_final_approval(
-            state.synthesis_text, state.challenger_critique
+            state.synthesis_text, state.challenger_critique, state.challenger_issues
         )
         state.hitl_gate_3_approved = approved
+        if not approved:
+            state.challenger_retries += 1
         return state
 
     def _node_persist(self, state: PipelineState) -> PipelineState:
@@ -711,7 +828,7 @@ class Orchestrator:
                     depth_claims.append(claim.claim_text)
 
         if not depth_claims:
-            # No claims extracted — carry forward the previous concept
+            # No claims extracted - carry forward the previous concept
             prev_concept = state.concept_at_depth.get(completed_depth, state.user_concept)
             state.concept_at_depth[completed_depth + 1] = prev_concept
             return
@@ -725,7 +842,7 @@ class Orchestrator:
             f"Below are claims extracted from papers at this depth level:\n{claims_text}\n\n"
             f"Based on these claims and the citation chain, what is the PRECURSOR or ANCESTOR "
             f"concept that these papers are building upon? This is the broader or older concept "
-            f"that existed BEFORE \"{current_concept}\" was formalised — the idea it evolved from.\n\n"
+            f"that existed BEFORE \"{current_concept}\" was formalised - the idea it evolved from.\n\n"
             f"Rules:\n"
             f"- If the concept appears to have ORIGINATED at this depth (i.e., the papers introduce "
             f"it as novel rather than building on a prior idea), respond with the same concept name.\n"
@@ -752,7 +869,7 @@ class Orchestrator:
                 completed_depth, current_concept, completed_depth + 1, abstracted
             )
         except Exception as e:
-            logger.warning("Concept abstraction failed: %s — using previous concept", e)
+            logger.warning("Concept abstraction failed: %s - using previous concept", e)
             state.concept_at_depth[completed_depth + 1] = current_concept
 
     def _pop_next_paper(self, state: PipelineState) -> "CandidatePaper | None":
@@ -778,7 +895,7 @@ class Orchestrator:
             paper = self.retriever.fetch_paper_by_id(ref_id)
             if paper is not None:
                 return paper
-            # Couldn't fetch — remove from queue and try next
+            # Couldn't fetch - remove from queue and try next
             state.pending_papers_at_depth.remove(ref_id)
 
         return None

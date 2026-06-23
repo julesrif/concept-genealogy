@@ -115,7 +115,7 @@ class PersistenceLayer:
             logger.info("Persistence: embedding model loaded for pgvector population")
         except ImportError:
             logger.info(
-                "Persistence: sentence-transformers not installed — "
+                "Persistence: sentence-transformers not installed - "
                 "pgvector embeddings will not be populated"
             )
             self.embedding_model = None
@@ -173,6 +173,7 @@ class PersistenceLayer:
                 for r in state.tracing_results
             ],
             "synthesis": state.synthesis_text,
+            "synthesis_status": state.synthesis_status,
             "challenger_critique": state.challenger_critique,
             "metadata": {
                 "max_depth": state.max_depth,
@@ -208,7 +209,7 @@ class PersistenceLayer:
                     INSERT INTO pipeline_runs
                       (run_id, user_concept, started_at, completed_at, seed_paper_id,
                        seed_paper_title, output_path, status)
-                    VALUES (%s, %s, NOW(), NOW(), %s, %s, %s, 'completed')
+                    VALUES (%s, %s, NOW(), NOW(), %s, %s, %s, %s)
                     ON CONFLICT (run_id) DO NOTHING
                     """,
                     (
@@ -217,6 +218,7 @@ class PersistenceLayer:
                         state.selected_seed.paper_id if state.selected_seed else None,
                         state.selected_seed.title if state.selected_seed else None,
                         json_path,
+                        state.synthesis_status,
                     )
                 )
 
@@ -273,7 +275,7 @@ class PersistenceLayer:
                 WHERE table_name = 'traced_claims' AND column_name = 'embedding'
             """)
             if not cur.fetchone():
-                logger.debug("Persistence: embedding column not found — skipping")
+                logger.debug("Persistence: embedding column not found - skipping")
                 return
 
             # Fetch all claims for this run that need embeddings

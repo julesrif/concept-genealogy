@@ -73,7 +73,7 @@ class ElsevierClient:
                     return None
 
             elif response.status_code == 400:
-                # Some DOIs don't support text/plain — try XML fallback
+                # Some DOIs don't support text/plain - try XML fallback
                 logger.debug("Elsevier: text/plain rejected for DOI %s, trying XML", doi)
                 return self._try_xml_fallback(doi)
 

@@ -22,7 +22,7 @@ Synthesiser + Challenger + HITL + storage + stretch
 - [x] Challenger - single-sided adversarial review (replaced stub with full implementation)
 - [x] Storage - PostgreSQL persistence, JSON + Markdown dual output, pgvector embeddings
 - [x] HITL Gates - 4 web-based gates (seed selection, graph review, synthesis approval, final approval)
-- [x] pgvector embeddings (all-mpnet-base-v2, 768d) — drift detection operational
+- [x] pgvector embeddings (all-mpnet-base-v2, 768d) - drift detection operational
 - [x] End-to-end functional test with "attention mechanism"
 - [x] CrossRef reference fallback + Elsevier full-text API
 - [x] DOI input mode with concept extraction
@@ -39,7 +39,7 @@ Documentation + testing evidence + presentation
 - [x] Frontend - Vue 3 SPA with live pipeline monitoring, interactive HITL gates, graph visualisation
 - [ ] PowerPoint deck - 10 slides max, covers all grading criteria
 - [ ] Audio transcript - narration script aligned to slides
-- [ ] Screenshots of execution (optional — test evidence + output files may suffice)
+- [ ] Screenshots of execution (optional - test evidence + output files may suffice)
 
 # Pre-submission checklist
 - [ ] Verify no `.env` or secrets in git history (`git log --all --diff-filter=A -- '*.env'`)

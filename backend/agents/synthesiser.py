@@ -2,7 +2,7 @@
 agents/synthesiser.py - Synthesiser agent.
 
 ROLE IN ARCHITECTURE:
-Reactive specialist agent. Receives validated claims and citation data from all
+Stateless worker node. Receives validated claims and citation data from all
 tracing levels and produces a grounded synthesis - a coherent narrative of the
 concept's genealogy across the explored citation chain.
 
@@ -88,9 +88,14 @@ class SynthesiserAgent:
         self,
         tracing_results: list[TracingResult],
         user_concept: str,
+        feedback: str | None = None,
     ) -> str:
         """
         Main entry point. Returns Markdown synthesis string.
+
+        Args:
+            feedback: Optional challenger critique from a previous attempt.
+                      When provided, the LLM is instructed to address the issues.
 
         Retry logic is handled by the Orchestrator (max_synthesiser_retries=3).
         The Synthesiser itself does not retry - it returns whatever the LLM produces
@@ -132,6 +137,18 @@ class SynthesiserAgent:
             concept=user_concept,
             claims_by_depth=claims_by_depth,
         )
+
+        # Append revision instructions when challenger feedback is available
+        if feedback:
+            prompt += (
+                "\n\n---\nREVISION REQUIRED: A previous version of this synthesis was "
+                "rejected after adversarial review. Address the following issues in your "
+                "revised synthesis. Remove or qualify any unsupported claims, reduce "
+                "overstated language, and correct any conceptual drift identified:\n\n"
+                f"{feedback}\n\n"
+                "Write an improved synthesis that resolves these issues while remaining "
+                "grounded in the provided claims:"
+            )
 
         try:
             response = self.groq.chat_completion(

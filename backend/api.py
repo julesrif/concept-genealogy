@@ -65,7 +65,9 @@ class GateRequest(BaseModel):
     candidates: list[dict] = Field(default_factory=list)  # Gate 1
     concepts: list[str] = Field(default_factory=list)      # DOI mode concept selection
     synthesis_text: Optional[str] = None                   # Gate 2 & 3
+    tracing_papers: list[dict] = Field(default_factory=list)  # Gate 2: traced papers summary
     challenger_critique: Optional[str] = None              # Gate 3
+    challenger_issues: list[dict] = Field(default_factory=list)  # Gate 3 structured issues
 
 
 class RunStatus(str, Enum):
@@ -264,10 +266,15 @@ class WebHITLGate:
             return selected if selected else None
         return None
 
-    def gate_2_synthesis_approval(self, synthesis_text: Optional[str]) -> bool:
+    def gate_2_synthesis_approval(
+        self,
+        synthesis_text: Optional[str],
+        tracing_papers: list[dict] | None = None,
+    ) -> bool:
         gate = GateRequest(
             gate_type=GateType.SYNTHESIS_APPROVAL,
             synthesis_text=synthesis_text,
+            tracing_papers=tracing_papers or [],
         )
         self.store.set_gate(self.run_id, gate)
         response = self.store.wait_for_gate_response(self.run_id)
@@ -290,11 +297,13 @@ class WebHITLGate:
         self,
         synthesis_text: Optional[str],
         challenger_critique: Optional[str],
+        challenger_issues: list[dict] | None = None,
     ) -> bool:
         gate = GateRequest(
             gate_type=GateType.FINAL_APPROVAL,
             synthesis_text=synthesis_text,
             challenger_critique=challenger_critique,
+            challenger_issues=challenger_issues or [],
         )
         self.store.set_gate(self.run_id, gate)
         response = self.store.wait_for_gate_response(self.run_id)
@@ -327,59 +336,80 @@ class RunLogHandler(logging.Handler):
 
 def run_pipeline_thread(run_id: str, concept: str, doi: str | None, config_dict: dict):
     """Execute the pipeline in a background thread with web HITL gates."""
-    from core.orchestrator import Orchestrator
 
-    # Inject a progress callback for user-facing messages only
+    # Inject a progress callback that writes to both run_store (for frontend)
+    # and Python logger (for console visibility in uvicorn output)
     def emit_progress(message: str, level: str = "INFO"):
         run_store.add_log(run_id, level, "pipeline", message)
-
-    config_dict["_progress_callback"] = emit_progress
-
-    def on_tracing_complete(tracing_results, seed_paper, concept_at_depth=None):
-        """Called by orchestrator when tracing is done, before synthesis."""
-        results_dicts = [r.dict() for r in tracing_results]
-        seed_dict = seed_paper.dict() if seed_paper else None
-        run_store.set_tracing_results(run_id, results_dicts, seed_dict, concept_at_depth)
-
-    config_dict["_tracing_complete_callback"] = on_tracing_complete
-
-    display = f"DOI: {doi}" if doi else f"concept: \"{concept}\""
-    emit_progress(f"Starting pipeline for {display}")
+        getattr(logger, level.lower(), logger.info)(
+            "[run:%s] %s", run_id, message
+        )
 
     try:
-        # Create orchestrator with web HITL gate
-        orchestrator = Orchestrator(config_dict)
-        orchestrator.hitl = WebHITLGate(run_id, run_store)
+        from core.orchestrator import Orchestrator
 
-        # Hook into stage updates
-        original_wrap = orchestrator._wrap_node
+        config_dict["_progress_callback"] = emit_progress
 
-        def stage_tracking_wrap(fn):
-            wrapped = original_wrap(fn)
+        def on_tracing_complete(tracing_results, seed_paper, concept_at_depth=None):
+            """Called by orchestrator when tracing is done, before synthesis."""
+            results_dicts = [r.dict() for r in tracing_results]
+            seed_dict = seed_paper.dict() if seed_paper else None
+            run_store.set_tracing_results(run_id, results_dicts, seed_dict, concept_at_depth)
 
-            def with_tracking(state: dict):
-                stage = state.get("stage", "unknown")
-                run_store.update_stage(run_id, stage)
-                return wrapped(state)
-            return with_tracking
+        config_dict["_tracing_complete_callback"] = on_tracing_complete
 
-        orchestrator._wrap_node = stage_tracking_wrap
-        orchestrator.graph = orchestrator._build_graph()
+        display = f"DOI: {doi}" if doi else f"concept: \"{concept}\""
+        emit_progress(f"Starting pipeline for {display}")
 
-        final_state = orchestrator.run(concept, input_doi=doi)
+        # Attach RunLogHandler so agent-level logger output also reaches the frontend
+        log_handler = RunLogHandler(run_id, run_store)
+        log_handler.setLevel(logging.INFO)
+        log_handler.setFormatter(logging.Formatter("%(message)s"))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(log_handler)
 
-        if final_state.stage == PipelineStage.DONE:
-            emit_progress("Pipeline completed successfully.")
-            run_store.set_completed(run_id, final_state.output_path)
-        else:
-            error_msg = final_state.error_message or "Unknown error"
-            emit_progress(f"Pipeline failed: {error_msg}", "ERROR")
-            run_store.set_failed(run_id, error_msg)
+        try:
+            # Create orchestrator with web HITL gate
+            orchestrator = Orchestrator(config_dict)
+            orchestrator.hitl = WebHITLGate(run_id, run_store)
+
+            # Hook into stage updates
+            original_wrap = orchestrator._wrap_node
+
+            def stage_tracking_wrap(fn):
+                wrapped = original_wrap(fn)
+
+                def with_tracking(state: dict):
+                    stage = state.get("stage", "unknown")
+                    run_store.update_stage(run_id, stage)
+                    return wrapped(state)
+                return with_tracking
+
+            orchestrator._wrap_node = stage_tracking_wrap
+            orchestrator.graph = orchestrator._build_graph()
+
+            final_state = orchestrator.run(concept, input_doi=doi)
+
+            if final_state.stage == PipelineStage.DONE:
+                emit_progress("Pipeline completed successfully.")
+                run_store.set_completed(run_id, final_state.output_path)
+            else:
+                error_msg = final_state.error_message or "Unknown error"
+                emit_progress(f"Pipeline failed: {error_msg}", "ERROR")
+                run_store.set_failed(run_id, error_msg)
+
+        except Exception as e:
+            logger.exception("Pipeline run %s failed", run_id)
+            emit_progress(f"An error occurred: {e}", "ERROR")
+            run_store.set_failed(run_id, str(e))
+        finally:
+            root_logger.removeHandler(log_handler)
 
     except Exception as e:
-        logger.exception("Pipeline run %s failed", run_id)
-        emit_progress(f"An error occurred: {e}", "ERROR")
-        run_store.set_failed(run_id, str(e))
+        # Catches import errors or any failure before the inner try block
+        logger.exception("Pipeline thread %s crashed during setup", run_id)
+        run_store.add_log(run_id, "ERROR", "pipeline", f"Setup failed: {e}")
+        run_store.set_failed(run_id, f"Setup failed: {e}")
 
 
 # ── FastAPI app ─────────────────────────────────────────────────────────────
@@ -500,7 +530,7 @@ async def get_graph(run_id: str):
     Build a concept genealogy graph from the tracing results.
 
     Returns nodes (papers at each depth) and edges showing the actual citation
-    chain — which paper's references led to which traced paper. This accurately
+    chain - which paper's references led to which traced paper. This accurately
     represents the BFS traversal the pipeline performed.
     """
     info = run_store.get_run(run_id)
@@ -533,7 +563,7 @@ async def get_graph(run_id: str):
         })
         paper_ids_added.add(seed_id)
 
-    # Process each tracing result — add paper nodes
+    # Process each tracing result - add paper nodes
     for result in tracing_results:
         paper_id = result["paper_id"]
         depth = result.get("depth", 0)

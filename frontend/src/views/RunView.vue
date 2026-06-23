@@ -1,14 +1,14 @@
 <!--
-  RunView.vue — Live pipeline monitor with HITL gate interaction.
+  RunView.vue - Live pipeline monitor with HITL gate interaction.
 
   Design decisions:
   - Polling (setInterval 2 s) chosen over WebSockets because: (a) the LangGraph pipeline
     advances in discrete steps with multi-second latency between stages, making push
     unnecessary; (b) polling is simpler to implement behind reverse proxies and load
     balancers; (c) reconnection logic for WebSocket adds complexity disproportionate
-    to the update frequency (Russell & Norvig, 2021 — simplicity principle).
+    to the update frequency (Russell & Norvig, 2021 - simplicity principle).
   - Pipeline progress bar renders all stages declaratively from a static list, with
-    CSS classes toggled by comparing the current run stage — avoids imperative DOM
+    CSS classes toggled by comparing the current run stage - avoids imperative DOM
     manipulation and leverages Vue's reactive rendering.
   - HITL gate cards render conditionally (v-if on gate_type) so only the active gate
     is shown; this prevents user confusion and enforces the sequential gate protocol
@@ -165,6 +165,9 @@
         <p class="tracing-current" v-if="tracingProgress.currentPaper">
           Currently: {{ tracingProgress.currentPaper }}
         </p>
+        <p class="tracing-waiting" v-if="tracingProgress.waitingMessage">
+          {{ tracingProgress.waitingMessage }}
+        </p>
         <div v-if="tracingProgress.conceptAbstractions.length" class="concept-abstractions">
           <span class="stat-label">Concept evolution:</span>
           <div class="concept-chain">
@@ -210,7 +213,26 @@
           or reject to trigger re-synthesis.
         </p>
         <div class="synthesis-content">
-          <pre>{{ run.current_gate.synthesis_text || '(empty synthesis)' }}</pre>
+          <div class="markdown-body" v-html="renderMarkdown(run.current_gate.synthesis_text || '(empty synthesis)')"></div>
+        </div>
+        <!-- Traced papers references -->
+        <div v-if="run.current_gate.tracing_papers?.length" class="tracing-references">
+          <h4>📚 References ({{ run.current_gate.tracing_papers.length }} papers traced)</h4>
+          <ul class="reference-list">
+            <li v-for="(paper, idx) in run.current_gate.tracing_papers" :key="paper.paper_id" class="reference-item">
+              <span class="ref-number">[{{ idx + 1 }}]</span>
+              <span class="ref-title">{{ paper.paper_title }}</span>
+              <span v-if="paper.authors?.length" class="ref-authors">
+                - {{ paper.authors.slice(0, 3).join(', ') }}<span v-if="paper.authors.length > 3"> et al.</span>
+              </span>
+              <span class="ref-meta">
+                (Depth {{ paper.depth }}, {{ paper.num_claims }} claim{{ paper.num_claims !== 1 ? 's' : '' }})
+              </span>
+              <span v-if="paper.doi" class="ref-doi">
+                DOI: <a :href="'https://doi.org/' + paper.doi" target="_blank">{{ paper.doi }}</a>
+              </span>
+            </li>
+          </ul>
         </div>
         <div class="gate-actions">
           <button class="btn btn-success" :disabled="responding" @click="approveGate">
@@ -231,18 +253,43 @@
         </p>
         <div class="synthesis-content">
           <h4>Synthesis</h4>
-          <pre>{{ run.current_gate.synthesis_text || '(no synthesis)' }}</pre>
+          <div class="markdown-body" v-html="renderMarkdown(run.current_gate.synthesis_text || '(no synthesis)')"></div>
         </div>
-        <div v-if="run.current_gate.challenger_critique" class="synthesis-content challenger">
-          <h4>Challenger Review</h4>
-          <pre>{{ run.current_gate.challenger_critique }}</pre>
+        <div v-if="challengerData" class="synthesis-content challenger">
+          <h4>🛡️ Challenger Adversarial Review</h4>
+          <div class="challenger-summary">
+            <span class="badge" :class="'badge-' + challengerData.assessment">
+              {{ challengerData.assessment }}
+            </span>
+            <span class="challenger-meta">
+              {{ challengerData.totalIssues }} issue{{ challengerData.totalIssues !== 1 ? 's' : '' }} found
+            </span>
+          </div>
+          <div v-for="group in challengerData.groups" :key="group.severity" class="issue-group">
+            <details :open="group.severity === 'high'">
+              <summary :class="'issue-summary issue-' + group.severity">
+                <span class="issue-emoji">{{ group.emoji }}</span>
+                {{ group.label }} ({{ group.issues.length }})
+              </summary>
+              <div class="issue-list">
+                <div v-for="(issue, idx) in group.issues" :key="idx" class="issue-item">
+                  <span class="issue-type">{{ issue.typeLabel }}</span>
+                  <blockquote v-if="issue.quote" class="issue-quote">{{ issue.quote }}</blockquote>
+                  <p class="issue-explanation">{{ issue.explanation }}</p>
+                </div>
+              </div>
+            </details>
+          </div>
+          <p v-if="challengerData.totalIssues === 0" class="no-issues">
+            ✅ No significant issues identified.
+          </p>
         </div>
         <div class="gate-actions">
           <button class="btn btn-success" :disabled="responding" @click="approveGate">
             [OK] Approve & Persist
           </button>
           <button class="btn btn-danger" :disabled="responding" @click="rejectGate">
-            ✗ Reject (Back to Synthesis)
+            ✗ Reject (Re-challenge)
           </button>
         </div>
       </div>
@@ -326,30 +373,39 @@ const stageOrder = stages.map(s => s.key)
 
 // Parse tracing progress from pipeline log messages
 const tracingProgress = computed(() => {
-  const progress = { currentDepth: -1, maxDepth: 3, papersTraced: 0, totalClaims: 0, totalRefs: 0, currentPaper: '', conceptAbstractions: [], percent: 0 }
+  const progress = { currentDepth: -1, maxDepth: 3, papersTraced: 0, totalClaims: 0, totalRefs: 0, currentPaper: '', conceptAbstractions: [], percent: 0, waitingMessage: '' }
   for (const entry of logs.value) {
     if (entry.source !== 'pipeline') continue
     const msg = entry.message
 
-    // "Depth N, Paper M — "Title""
-    const depthMatch = msg.match(/Depth (\d+), Paper (\d+) — "(.+)"/)
+    // "Depth N, Paper M - "Title""
+    const depthMatch = msg.match(/Depth (\d+), Paper (\d+) - "(.+)"/)
     if (depthMatch) {
       progress.currentDepth = parseInt(depthMatch[1])
       progress.papersTraced++
       progress.currentPaper = depthMatch[3]
+      progress.waitingMessage = ''
     }
 
-    // "Depth N — X claims, Y references found"
-    const resultMatch = msg.match(/Depth \d+ — (\d+) claims, (\d+) references found/)
+    // "Depth N - X claims, Y references found"
+    const resultMatch = msg.match(/Depth \d+ - (\d+) claims, (\d+) references found/)
     if (resultMatch) {
       progress.totalClaims += parseInt(resultMatch[1])
       progress.totalRefs += parseInt(resultMatch[2])
+      progress.waitingMessage = ''
     }
 
     // "Advancing to depth N: M papers to trace"
     const advanceMatch = msg.match(/Advancing to depth (\d+)/)
     if (advanceMatch) {
       progress.currentDepth = parseInt(advanceMatch[1])
+      progress.waitingMessage = ''
+    }
+
+    // Rate-limit / retry messages
+    const rateLimitMatch = msg.match(/Rate limited.*?waiting (\d+)s.*?\(retry (\d+)\/(\d+)\)/)
+    if (rateLimitMatch) {
+      progress.waitingMessage = `⏳ Rate limited - waiting ${rateLimitMatch[1]}s (retry ${rateLimitMatch[2]}/${rateLimitMatch[3]})`
     }
 
     // "Concept abstraction: depth N "X" → depth N+1 "Y""
@@ -369,6 +425,66 @@ const tracingProgress = computed(() => {
   }
   return progress
 })
+
+// Parse structured challenger issues into grouped display data
+const challengerData = computed(() => {
+  const gate = run.value?.current_gate
+  if (gate?.gate_type !== 'final_approval') return null
+  const issues = gate.challenger_issues || []
+  const typeLabels = {
+    unsupported: 'Unsupported claim',
+    overstated: 'Overstated conclusion',
+    drift: 'Conceptual drift',
+    missing_counter: 'Missing counter-evidence',
+  }
+  const severityConfig = {
+    high: { emoji: '🔴', label: 'High severity' },
+    medium: { emoji: '🟡', label: 'Medium severity' },
+    low: { emoji: '🟢', label: 'Low severity' },
+  }
+  const groups = []
+  for (const severity of ['high', 'medium', 'low']) {
+    const sevIssues = issues.filter(i => i.severity === severity)
+    if (sevIssues.length > 0) {
+      groups.push({
+        severity,
+        emoji: severityConfig[severity].emoji,
+        label: severityConfig[severity].label,
+        issues: sevIssues.map(i => ({
+          typeLabel: typeLabels[i.type] || i.type,
+          quote: i.quote || '',
+          explanation: i.explanation || '',
+        })),
+      })
+    }
+  }
+  // Derive assessment from the critique text or default
+  const critique = gate.challenger_critique || ''
+  const assessmentMatch = critique.match(/Overall assessment:\*?\*?\s*(\w+)/i)
+  const assessment = assessmentMatch ? assessmentMatch[1].toLowerCase() : 'adequate'
+  return { groups, totalIssues: issues.length, assessment }
+})
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/<\/ul>\s*<ul>/g, '')
+    .replace(/\[Source: ([^\]]+)\]/g, '<cite>[$1]</cite>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>').replace(/$/, '</p>')
+    .replace(/<p><h([34])>/g, '<h$1>').replace(/<\/h([34])><\/p>/g, '</h$1>')
+    .replace(/<p><ul>/g, '<ul>').replace(/<\/ul><\/p>/g, '</ul>')
+    .replace(/<p><blockquote>/g, '<blockquote>').replace(/<\/blockquote><\/p>/g, '</blockquote>')
+    .replace(/<p><\/p>/g, '')
+}
 
 function isStageActive(key) {
   return run.value?.stage === key
@@ -642,6 +758,18 @@ onUnmounted(() => {
   font-style: italic;
 }
 
+.tracing-waiting {
+  font-size: 0.8125rem;
+  color: #d97706;
+  font-style: italic;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .concept-abstractions {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -777,6 +905,54 @@ onUnmounted(() => {
   color: #7c3aed;
 }
 
+.tracing-references {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+.tracing-references h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+.reference-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.reference-item {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 0.4rem 0.6rem;
+  background: var(--color-bg-secondary, #f9fafb);
+  border-radius: 6px;
+}
+.ref-number {
+  font-weight: 700;
+  color: var(--color-primary, #2563eb);
+  margin-right: 0.4rem;
+}
+.ref-title {
+  font-weight: 600;
+}
+.ref-authors {
+  color: var(--color-text-secondary, #6b7280);
+}
+.ref-meta {
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 0.8rem;
+  margin-left: 0.3rem;
+}
+.ref-doi {
+  font-size: 0.75rem;
+  margin-left: 0.4rem;
+}
+.ref-doi a {
+  color: var(--color-primary, #2563eb);
+}
+
 .candidate-abstract {
   margin-top: 0.5rem;
   padding-left: 2.25rem;
@@ -859,6 +1035,107 @@ onUnmounted(() => {
 
 .synthesis-content.challenger {
   border-left: 3px solid var(--color-warning);
+  max-height: none;
+}
+
+/* Markdown body rendering */
+.markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+.markdown-body h3 { font-size: 1.1rem; margin: 1rem 0 0.5rem; }
+.markdown-body h4 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
+.markdown-body strong { font-weight: 600; }
+.markdown-body blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #475569;
+  font-style: italic;
+}
+.markdown-body cite {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--color-primary);
+}
+.markdown-body ul { padding-left: 1.25rem; margin: 0.5rem 0; }
+.markdown-body li { margin-bottom: 0.25rem; }
+
+/* Challenger structured review */
+.challenger-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.challenger-summary .badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-strong { background: #dcfce7; color: #166534; }
+.badge-adequate { background: #fef9c3; color: #854d0e; }
+.badge-weak { background: #fee2e2; color: #991b1b; }
+.challenger-meta {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.issue-group {
+  margin-bottom: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.issue-group details { }
+.issue-summary {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+.issue-summary:hover { background: #f1f5f9; }
+.issue-high { background: #fef2f2; color: #991b1b; }
+.issue-medium { background: #fffbeb; color: #92400e; }
+.issue-low { background: #f0fdf4; color: #166534; }
+.issue-emoji { font-size: 1rem; }
+.issue-list { padding: 0.5rem 1rem 1rem; }
+.issue-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.issue-item:last-child { border-bottom: none; }
+.issue-type {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.issue-quote {
+  margin: 0.25rem 0;
+  padding: 0.3rem 0.75rem;
+  border-left: 3px solid #94a3b8;
+  font-style: italic;
+  font-size: 0.8125rem;
+  color: #475569;
+  background: #f8fafc;
+}
+.issue-explanation {
+  font-size: 0.8125rem;
+  margin: 0.25rem 0 0;
+  color: #334155;
+}
+.no-issues {
+  font-size: 0.875rem;
+  color: #166534;
+  font-weight: 500;
 }
 
 .completed-card {

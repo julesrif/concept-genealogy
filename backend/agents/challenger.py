@@ -21,7 +21,7 @@ DEBATE MECHANICS:
 Each round: Challenger generates critique → checks if issues remain → terminates
 when no new issues are found or max rounds is reached. This is a single-sided
 debate (Challenger challenges, Synthesiser does not respond) because the synthesis
-is a static artefact at this point — the HITL Gate 3 acts as the Synthesiser's
+is a static artefact at this point - the HITL Gate 3 acts as the Synthesiser's
 "response" by deciding whether to accept, reject, or request revision.
 
 References:
@@ -39,11 +39,16 @@ from core.state import TracingResult, EvaluatedClaim
 
 logger = logging.getLogger(__name__)
 
-MAX_DEBATE_ROUNDS = 2  # bounded iteration per design proposal Section 5
+# MAX_DEBATE_ROUNDS=2: Each round costs 1 LLM call to the 70b model (30 req/min
+# Groq free-tier limit). Two rounds are sufficient because the Challenger operates
+# on a static synthesis - round 2 only adds value if round 1 identified issues
+# that suggest deeper structural problems. Empirically, round 3+ produces
+# repetitive findings with diminishing severity (Irving et al., 2018).
+MAX_DEBATE_ROUNDS = 2
 
 CHALLENGE_SYSTEM_PROMPT = """You are a rigorous academic reviewer performing adversarial review of a concept genealogy synthesis. Your role is to identify weaknesses, unsupported claims, and logical gaps.
 
-You have access to the actual traced evidence (claims extracted from papers with validity scores and depth levels). Your critique MUST be grounded in the evidence provided — do not speculate about what the papers might contain.
+You have access to the actual traced evidence (claims extracted from papers with validity scores and depth levels). Your critique MUST be grounded in the evidence provided - do not speculate about what the papers might contain.
 
 Respond with a JSON object:
 {
@@ -71,7 +76,10 @@ CHALLENGE_USER_PROMPT = """## Synthesis Under Review:
 1. Check every factual statement in the synthesis against the traced evidence
 2. Identify claims that lack supporting evidence from the traced papers
 3. Flag any overstated conclusions (weak evidence presented as definitive)
-4. Note conceptual drift at deeper depth levels (claims far from the root concept "{concept}")
+4. Note conceptual drift at deeper depth levels. Drift means the claim's usage of "{concept}" has diverged from the gold-standard seed paper definition. Assess drift on three axes:
+   - Historical use: how the seed paper defined the concept
+   - Current use: how the claim at this depth redefines or applies it
+   - Evolutionary path: the step-by-step transformation through the citation chain
 5. Identify missing caveats or counter-evidence
 
 Provide your structured critique."""
@@ -90,6 +98,8 @@ class ChallengerAgent:
         self.config = config
         self.groq = config.get("_groq_client")
         self.model = config.get("groq_model_slow", "llama-3.3-70b-versatile")
+        self.last_issues: list[dict] = []  # structured issues from latest run
+        self.last_recommendation: str = "revise"  # latest recommendation: approve|revise|reject
         logger.info("ChallengerAgent initialised (model=%s)", self.model)
 
     def run(
@@ -97,9 +107,15 @@ class ChallengerAgent:
         synthesis_text: str | None,
         tracing_results: list[TracingResult],
         user_concept: str = "",
+        previous_critique: str | None = None,
     ) -> str:
         """
         Review synthesis against traced evidence and return a structured critique.
+
+        Args:
+            previous_critique: If this is a debate retry (Gate 3 rejected),
+                contains the previous round's critique. The Challenger is asked
+                to dig deeper and find issues not already identified.
 
         Falls back to a summary-only review if no LLM client is available.
         """
@@ -111,7 +127,7 @@ class ChallengerAgent:
 
         # If no LLM available, produce a structured summary without adversarial analysis
         if not self.groq:
-            logger.warning("ChallengerAgent: no Groq client — producing coverage-only review")
+            logger.warning("ChallengerAgent: no Groq client - producing coverage-only review")
             return self._fallback_critique(synthesis_text, tracing_results, total_claims, depths_covered)
 
         # Build evidence summary for the LLM
@@ -119,19 +135,30 @@ class ChallengerAgent:
 
         # Multi-round adversarial review
         all_issues = []
+        assessment = "adequate"
+        recommendation = "revise"
         for round_num in range(1, MAX_DEBATE_ROUNDS + 1):
             logger.info("Challenger: debate round %d/%d", round_num, MAX_DEBATE_ROUNDS)
             issues, assessment, recommendation = self._run_challenge_round(
-                synthesis_text, evidence_summary, user_concept
+                synthesis_text, evidence_summary, user_concept,
+                prior_issues=all_issues,
+                previous_critique=previous_critique,
             )
             if issues:
-                all_issues.extend(issues)
+                # Deduplicate: skip issues whose quote already appeared
+                existing_quotes = {i.get("quote", "").strip() for i in all_issues}
+                for issue in issues:
+                    if issue.get("quote", "").strip() not in existing_quotes:
+                        all_issues.append(issue)
+                        existing_quotes.add(issue.get("quote", "").strip())
             # If no new issues found in this round, terminate early
             if not issues or assessment == "strong":
                 logger.info("Challenger: terminating at round %d (no new issues or strong)", round_num)
                 break
 
         # Format final critique for HITL Gate 3 display
+        self.last_issues = all_issues
+        self.last_recommendation = recommendation
         return self._format_critique(
             all_issues, total_claims, depths_covered, len(tracing_results),
             assessment, recommendation
@@ -142,6 +169,8 @@ class ChallengerAgent:
         synthesis_text: str,
         evidence_summary: str,
         user_concept: str,
+        prior_issues: list[dict] | None = None,
+        previous_critique: str | None = None,
     ) -> tuple[list[dict], str, str]:
         """
         Execute one round of adversarial challenge via LLM.
@@ -154,6 +183,30 @@ class ChallengerAgent:
             concept=user_concept,
         )
 
+        # On debate retry, tell the LLM about the previous critique that was
+        # rejected by the user, so it produces a deeper/different analysis
+        if previous_critique:
+            prompt += (
+                "\n\n## Previous Critique (user found this insufficient - dig deeper):\n"
+                f"{previous_critique}\n\n"
+                "The user rejected the above critique. Produce a MORE THOROUGH review "
+                "that identifies issues the previous critique missed. Look for subtler "
+                "problems: implicit assumptions, unsupported causal claims, selective "
+                "evidence use, or missing alternative explanations."
+            )
+
+        # Tell subsequent rounds about already-found issues to avoid duplicates
+        if prior_issues:
+            prior_summary = "\n".join(
+                f"- [{i.get('type')}] \"{i.get('quote', '')[:80]}...\""
+                for i in prior_issues
+            )
+            prompt += (
+                "\n\n## Already Identified Issues (DO NOT repeat these):\n"
+                f"{prior_summary}\n\n"
+                "Find ONLY new issues not listed above."
+            )
+
         try:
             response = self.groq.chat_completion(
                 model=self.model,
@@ -161,7 +214,7 @@ class ChallengerAgent:
                     {"role": "system", "content": CHALLENGE_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.1,  # low but not zero — allows varied critique
+                temperature=0.1,  # low but not zero - allows varied critique
                 max_tokens=2000,
             )
             raw_output = response.choices[0].message.content

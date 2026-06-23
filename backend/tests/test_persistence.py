@@ -100,7 +100,7 @@ class TestPersistenceInit:
         """PersistenceLayer still works without sentence-transformers."""
         # The real init may or may not find sentence-transformers depending on env
         layer = PersistenceLayer(persistence_config)
-        # Either it loaded or it's None — both are acceptable
+        # Either it loaded or it's None - both are acceptable
         assert hasattr(layer, "embedding_model")
 
 
@@ -177,7 +177,7 @@ class TestPopulateEmbeddings:
         layer.embedding_model = MagicMock()
 
         mock_cur = MagicMock()
-        # First query checks column existence — return empty (no column)
+        # First query checks column existence - return empty (no column)
         mock_cur.fetchone.return_value = None
         layer._populate_embeddings(mock_cur, "run_123")
         # Should have checked column but not fetched claims
@@ -240,7 +240,7 @@ class TestPopulateEmbeddings:
         assert "0.1" in vec_arg
 
     def test_exception_is_non_fatal(self, persistence_config):
-        """Embedding failures don't propagate — persistence continues."""
+        """Embedding failures don't propagate - persistence continues."""
         layer = PersistenceLayer(persistence_config)
         layer.embedding_model = MagicMock()
 

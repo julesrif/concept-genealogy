@@ -1,15 +1,15 @@
 <!--
-  ResultView.vue — Completed run display (narrative, graph, claims table).
+  ResultView.vue - Completed run display (narrative, graph, claims table).
 
   Design decisions:
   - Separates the completed result view from the live RunView because the data shape
     differs: ResultView reads a static JSON output file whereas RunView polls mutable
     pipeline state. Separation follows the Single Responsibility Principle.
   - The GenealogyGraph component is embedded here (not in RunView) because the graph
-    data is only available after the pipeline completes — rendering mid-pipeline would
+    data is only available after the pipeline completes - rendering mid-pipeline would
     show an incomplete/misleading visualisation.
   - Claims are displayed in a sortable table with depth and confidence columns so the
-    user can assess synthesis quality — supports the critical evaluation goal of the
+    user can assess synthesis quality - supports the critical evaluation goal of the
     HITL design (Mosqueira-Rey et al., 2023).
   - Narrative is rendered with v-html from the backend Markdown-to-HTML conversion,
     as the synthesiser produces structured Markdown with headers and citations.

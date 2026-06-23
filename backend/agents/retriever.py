@@ -2,7 +2,7 @@
 agents/retriever.py - Retriever agent.
 
 ROLE IN ARCHITECTURE:
-Reactive specialist agent (subsumption layer - Brooks, 1991). Receives a decomposed
+Stateless worker node. Receives a decomposed
 sub-task (concept string) from the Orchestrator and returns academic metadata
 without any access to global pipeline state. Stateless by design.
 
@@ -27,7 +27,6 @@ WHY LOCAL SJR RANKING (NOT API-BASED):
 References:
   AI2 (2023) Semantic Scholar API License Agreement.
   arXiv (n.d.) License and copyright.
-  Brooks (1991) Intelligence without representation. AI, 47(1-3), 139-159.
   SCImago (n.d.) SJR - SCImago Journal & Country Rank.
 """
 
@@ -73,6 +72,7 @@ class RetrieverAgent:
         self.api_key = config.get("semantic_scholar_api_key", "")
         self.sjr_index = self._load_sjr_index(config.get("sjr_csv_path", "data/sjr_dataset.csv"))
         self._last_request_time: float = 0.0
+        self._progress = config.get("_progress_callback", lambda msg, level="INFO": None)
 
     def run(self, concept: str) -> list[CandidatePaper]:
         """
@@ -80,7 +80,7 @@ class RetrieverAgent:
 
         Returns at most max_candidates papers that have full-text availability
         (either open-access PDF or Elsevier DOI). Papers with only an abstract
-        are excluded from the seed selection — full-text is required for
+        are excluded from the seed selection - full-text is required for
         high-confidence claim extraction from the Gold Standard seed.
         """
         logger.info("Retriever: searching for concept='%s'", concept)
@@ -139,7 +139,7 @@ class RetrieverAgent:
         if self.api_key:
             headers["x-api-key"] = self.api_key
 
-        # Proactive rate limiting — wait if we're calling too fast
+        # Proactive rate limiting - wait if we're calling too fast
         min_interval = (
             self._MIN_REQUEST_INTERVAL_KEYED if self.api_key
             else self._MIN_REQUEST_INTERVAL
@@ -153,6 +153,10 @@ class RetrieverAgent:
                 logger.warning(
                     "Semantic Scholar 429 - waiting %.1fs before retry %d/%d",
                     delay, attempt, len(self._RETRY_DELAYS)
+                )
+                self._progress(
+                    f"Rate limited by Semantic Scholar - waiting {delay:.0f}s (retry {attempt}/{len(self._RETRY_DELAYS)})...",
+                    "WARNING",
                 )
                 time.sleep(delay)
 
@@ -258,7 +262,7 @@ class RetrieverAgent:
         directly from Elsevier/Springer/Wiley. Going CrossRef-first avoids wasting
         the S2 rate-limit budget on reference lookups.
         """
-        # Strategy 1: CrossRef (preferred — no rate limit, direct publisher metadata)
+        # Strategy 1: CrossRef (preferred - no rate limit, direct publisher metadata)
         logger.info("get_references called: paper_id=%s, doi=%s", paper_id, doi)
         if doi:
             logger.info("Trying CrossRef first for references (DOI: %s)", doi)
@@ -266,7 +270,7 @@ class RetrieverAgent:
             if crossref_result:
                 logger.info("CrossRef: %d references for paper %s", len(crossref_result), paper_id)
                 return crossref_result
-            logger.info("CrossRef returned no results for DOI %s — falling back to S2", doi)
+            logger.info("CrossRef returned no results for DOI %s - falling back to S2", doi)
 
         # Strategy 2: Semantic Scholar /references endpoint
         data = self._get(
@@ -396,12 +400,14 @@ class RetrieverAgent:
             logger.warning("S2 batch: connection error: %s", e)
             return []
 
-    @staticmethod
-    def _parse_paper(raw: dict) -> CandidatePaper:
+    def _parse_paper(self, raw: dict) -> CandidatePaper:
         """Convert raw Semantic Scholar API response to typed CandidatePaper."""
         authors = [a.get("name", "") for a in raw.get("authors", [])]
         oa_pdf = raw.get("openAccessPdf") or {}
         external_ids = raw.get("externalIds") or {}
+        venue = raw.get("publicationVenue") or {}
+        venue_name = (venue.get("name") or "").lower().strip()
+        sjr_score = self.sjr_index.get(venue_name) if venue_name else None
         return CandidatePaper(
             paper_id=raw.get("paperId", ""),
             title=raw.get("title", ""),
@@ -411,6 +417,7 @@ class RetrieverAgent:
             open_access_url=oa_pdf.get("url"),
             abstract=raw.get("abstract"),
             doi=external_ids.get("DOI"),
+            sjr_score=sjr_score,
         )
 
     def _rank_by_sjr(self, candidates: list[CandidatePaper]) -> list[CandidatePaper]:
@@ -449,10 +456,12 @@ class RetrieverAgent:
                 for row in reader:
                     title = row.get("Title", "").lower().strip()
                     try:
-                        score = float(row.get("SJR", 0) or 0)
+                        # SJR CSV uses European decimal notation (comma as decimal separator)
+                        raw_sjr = (row.get("SJR", "") or "").replace(",", ".")
+                        score = float(raw_sjr) if raw_sjr else 0.0
                     except ValueError:
                         score = 0.0
-                    if title:
+                    if title and score > 0:
                         sjr_index[title] = score
         except FileNotFoundError:
             logger.warning(

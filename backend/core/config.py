@@ -35,8 +35,8 @@ class Config(BaseSettings):
     # ── Groq LLM ──────────────────────────────────────────────────────────────
     groq_api_key: str = Field(..., env="GROQ_API_KEY")
 
-    # Lightweight model for extraction/evaluation (reactive agents)
-    # WHY 8b FOR REACTIVE AGENTS: keeps token expenditure proportional -
+    # Lightweight model for extraction/evaluation (stateless worker nodes)
+    # WHY 8b FOR STATELESS WORKER NODES: keeps token expenditure proportional -
     # extraction and validation do not require comparative reasoning.
     groq_model_fast: str = Field(
         default="llama-3.1-8b-instant",
@@ -64,6 +64,12 @@ class Config(BaseSettings):
     # ── Pipeline constraints ───────────────────────────────────────────────────
     max_depth: int = Field(default=3, env="MAX_DEPTH")
     max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
+
+    # Confidence assigned to claims extracted from abstracts rather than full text.
+    # Default 0.5 reflects that abstracts contain summarised findings without the
+    # supporting detail present in full papers. Configurable via env to allow
+    # domain-specific tuning (e.g., raise for fields with information-dense abstracts).
+    abstract_confidence: float = Field(default=0.5, env="ABSTRACT_CONFIDENCE")
 
     # ── SJR ranking ───────────────────────────────────────────────────────────
     # Path to local SJR CSV dataset (SCImago Journal & Country Rank, n.d.)

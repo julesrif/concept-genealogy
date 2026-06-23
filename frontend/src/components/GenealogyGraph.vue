@@ -1,19 +1,19 @@
 <!--
-  GenealogyGraph.vue — Interactive citation DAG visualisation.
+  GenealogyGraph.vue - Interactive citation DAG visualisation.
 
   Design decisions:
   - v-network-graph chosen over D3.js because it provides a declarative, Vue-native
-    graph renderer with built-in pan/zoom, node dragging, and edge labels — avoids
+    graph renderer with built-in pan/zoom, node dragging, and edge labels - avoids
     the imperative DOM manipulation that D3 requires and integrates cleanly with
     Vue's reactivity system (computed props trigger re-renders automatically).
   - dagre layout algorithm (Sugiyama-style hierarchical) is used for automatic node
     positioning because the citation graph is a directed acyclic graph where depth
-    (generation) should map to vertical layers — dagre optimises for minimal edge
+    (generation) should map to vertical layers - dagre optimises for minimal edge
     crossings in layered digraphs, producing readable academic genealogy trees.
   - Depth-based colour coding provides immediate visual semantics: seed paper (amber),
-    depth-1 (blue), depth-2 (purple), etc. — users can identify citation generations
+    depth-1 (blue), depth-2 (purple), etc. - users can identify citation generations
     at a glance without reading labels.
-  - The component is stateless (props-only) and reusable — it receives graphData and
+  - The component is stateless (props-only) and reusable - it receives graphData and
     renders it, with no knowledge of the pipeline or API. This follows the Presentational
     Component pattern (separation of data-fetching from rendering).
 -->
@@ -111,7 +111,7 @@ const seedNodeId = computed(() => {
 
 // BFS from seed to target, returns array of node IDs on the path
 function findPathToSeed(targetId) {
-  // Build adjacency — only use edges going from shallower to deeper depth
+  // Build adjacency - only use edges going from shallower to deeper depth
   // (true parent→child edges). Cross-depth or same-depth references can form
   // cycles which break the ancestor walk.
   const parentMap = {}

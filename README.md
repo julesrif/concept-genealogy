@@ -9,7 +9,7 @@ An LLM-powered multi-agent system for academic concept tracing and genealogy. Th
 
 ## Architecture
 
-The system adopts a **hybrid deliberative-reactive architecture** (Stone and Veloso, 2000). A centralised deliberative Orchestrator manages global state and execution loops via LangGraph, decomposing high-level research goals into actionable sub-tasks (Russell and Norvig, 2021), following resource-bounded practical reasoning (Bratman et al., 1988). Execution-level tasks are handled by reactive specialist agents responding directly to inputs without global state, consistent with subsumption architecture (Brooks, 1991). This structural separation isolates failures at the agent boundary level, preventing context-window degradation in the Orchestrator, keeping token expenditure proportional by assigning lightweight models to reactive agents and larger models only where comparative reasoning is required.
+The system adopts a **hybrid deliberative-stateless architecture** (Stone and Veloso, 2000). A centralised deliberative Orchestrator manages global state and execution loops via LangGraph, decomposing high-level research goals into actionable sub-tasks (Russell and Norvig, 2021), following resource-bounded practical reasoning (Bratman et al., 1988). Execution-level tasks are handled by stateless worker nodes - single-responsibility agents that receive only the slice of state they need, process it, and return typed output without access to global pipeline state. This structural separation isolates failures at the agent boundary level, preventing context-window degradation in the Orchestrator, keeping token expenditure proportional by assigning lightweight models to stateless worker nodes and larger models only where comparative reasoning is required.
 
 ```mermaid
 graph TB
@@ -74,13 +74,13 @@ graph TB
 
 | Agent | Model | Input | Output |
 |-------|-------|-------|--------|
-| **Orchestrator** | — | High-level user query | Decomposed sub-tasks and global state management |
-| **Retriever** | — | Decomposed sub-tasks | Academic metadata and top-3 candidate seed papers |
+| **Orchestrator** | - | High-level user query | Decomposed sub-tasks and global state management |
+| **Retriever** | - | Decomposed sub-tasks | Academic metadata and top-3 candidate seed papers |
 | **Citation Extractor** | llama-3.1-8b | Approved seed paper / references | Extracted inline citations, reference chains, and raw claims |
 | **Evaluator** | llama-3.1-8b | Extracted raw claims and context | Filtered relevant concepts, claim validity scores, and drift detection |
 | **Synthesiser** | llama-3.3-70b | Validated claims and citation data | Grounded synthesis and literature genealogy narrative |
 | **Challenger** | llama-3.3-70b | Synthesised summary | Conceptual drift analysis and counter-arguments |
-| **Inspector** | — | Raw structured output from any agent | Schema-compliant JSON or rejection signal triggering retry |
+| **Inspector** | - | Raw structured output from any agent | Schema-compliant JSON or rejection signal triggering retry |
 
 ### Execution Constraints
 
@@ -91,11 +91,11 @@ graph TB
 
 The pipeline pauses at mandatory decision points requiring user approval (Mosqueira-Rey et al., 2023):
 
-1. **Seed Selection** (concept mode) — User confirms or rejects the top-ranked seed paper
-1. **Concept Selection** (DOI mode) — User selects up to 3 concepts to trace from the provided paper
-2. **Graph Review** — User reviews the citation tracing tree before synthesis. This gate prevents unnecessary Synthesiser/Challenger invocations (the most expensive 70b model calls) when the graph is incomplete or structurally incorrect
-3. **Synthesis Approval** — User accepts or requests revision of the narrative
-4. **Final Approval** — User signs off on the complete output (with challenger critique)
+1. **Seed Selection** (concept mode) - User confirms or rejects the top-ranked seed paper
+1. **Concept Selection** (DOI mode) - User selects up to 3 concepts to trace from the provided paper
+2. **Graph Review** - User reviews the citation tracing tree before synthesis. This gate prevents unnecessary Synthesiser/Challenger invocations (the most expensive 70b model calls) when the graph is incomplete or structurally incorrect
+3. **Synthesis Approval** - User accepts or requests revision of the narrative
+4. **Final Approval** - User signs off on the complete output (with challenger critique)
 
 ### Execution Workflow
 
@@ -174,7 +174,7 @@ sequenceDiagram
 | **Groq inference (not OpenAI)** | Free-tier availability for academic use; LPU architecture ensures low-latency execution vital for agent coordination (Groq, 2025a) under academic-friendly license (Groq, 2025b) |
 | **Recursive citation tracing** | Depth-bounded traversal with configurable fan-out (`papers_per_level=3`) at each level; constrained snowball sampling prevents citation-graph explosion (Lecy and Beatty, 2012). At each depth transition, concept abstraction adapts the search concept to ancestral terminology |
 | **Three-strategy content fallback** | OA PDF → Elsevier API via DOI → abstract-only. Most journal papers are not available in Open Access; Elsevier institutional API enables full-text extraction for paywalled papers, maximising coverage |
-| **CrossRef reference fallback** | Semantic Scholar's reference index has coverage gaps — some highly-cited papers return zero references despite having extensive bibliographies. CrossRef serves as the primary reference source: reference DOIs are fetched from publisher-deposited metadata and batch-resolved back to Semantic Scholar paper IDs. CrossRef has no rate limit, preserving the S2 budget for paper metadata. S2 `/references` is used as fallback when no DOI is available |
+| **CrossRef reference fallback** | Semantic Scholar's reference index has coverage gaps - some highly-cited papers return zero references despite having extensive bibliographies. CrossRef serves as the primary reference source: reference DOIs are fetched from publisher-deposited metadata and batch-resolved back to Semantic Scholar paper IDs. CrossRef has no rate limit, preserving the S2 budget for paper metadata. S2 `/references` is used as fallback when no DOI is available |
 | **SJR-ranked reference selection** | When `papers_per_level` limits how many references are traced at each depth, the system fetches metadata for all candidate references and ranks them by SCImago Journal Rank before selecting the top-N, ensuring the highest-quality citation chains are followed first |
 | **Depth-adaptive concept abstraction** | Modern terminology often did not exist in older papers. At each depth transition, the LLM identifies the precursor concept from extracted claims (e.g., "attention mechanism" → "selective attention" → "feature-based saliency"). The Evaluator uses this abstracted term for relevance matching, preventing valid ancestral papers from being discarded due to terminology mismatch |
 | **Local SJR CSV** | Avoids runtime HTTP dependency for journal ranking; SCImago dataset bundled in `data/` (SCImago, n.d.) |
@@ -191,7 +191,7 @@ The following enhancements were made during implementation beyond the original d
 
 | Area | Proposal | Implementation | Rationale |
 |------|----------|----------------|-----------|
-| **HITL Gates** | 3 gates (seed, synthesis, final) | 4 gates (added Graph Review before synthesis) | The Synthesiser (70b) and Challenger (70b) are the most expensive pipeline stages. Presenting the citation graph for user review before invoking these models prevents wasted LLM calls on an incomplete or structurally incorrect tracing tree — the user can reject early at near-zero cost |
+| **HITL Gates** | 3 gates (seed, synthesis, final) | 4 gates (added Graph Review before synthesis) | The Synthesiser (70b) and Challenger (70b) are the most expensive pipeline stages. Presenting the citation graph for user review before invoking these models prevents wasted LLM calls on an incomplete or structurally incorrect tracing tree - the user can reject early at near-zero cost |
 | **Content fallback** | Semantic Scholar resolves OA PDFs natively (AI2, 2023; arXiv, n.d.) | OA PDF → Elsevier API → abstract-only fallback chain | The majority of journal papers are not available in Open Access. Since institutional Elsevier API access permits full-text data mining by DOI, adding this fallback significantly increases the proportion of papers from which claims can be extracted at full confidence |
 | **Reference retrieval** | Semantic Scholar `/references` endpoint only | CrossRef API primary → S2 `/references` fallback | Semantic Scholar has indexing gaps where peer-reviewed papers with extensive bibliographies return zero references. CrossRef receives publisher-deposited reference metadata directly from Elsevier, Springer, and Wiley, providing near-complete coverage. CrossRef is queried first (no rate limit), preserving the S2 rate budget for paper metadata fetches. DOIs are batch-resolved to S2 paper IDs via the `/paper/batch` endpoint |
 | **Reference selection** | Arbitrary ordering (first N references) | SJR-ranked selection at each depth level | When `papers_per_level` limits how many references are traced, selecting the first N arbitrarily may follow low-quality citation chains. The system now fetches metadata for candidate references and ranks them by SJR before selecting the top-N, ensuring the highest-quality journals are traced preferentially (SCImago, n.d.) |
@@ -201,7 +201,7 @@ The following enhancements were made during implementation beyond the original d
 | **Output format** | "Final Formatted results (json)" | JSON + Markdown dual output per run | JSON preserves machine-readable structure for future retrieval and embedding; Markdown provides a human-readable report that can be immediately shared, read in any editor, or rendered in the frontend's result detail view |
 | **Frontend** | "Web Interface" (unspecified framework) | Full SPA: Vue 3 + Vite with live pipeline monitoring, progress bar with stage indicators, real-time log streaming, interactive HITL gates, run history browser, and result detail view | The DPD specified a web interface but left implementation open. A reactive SPA with real-time WebSocket-style polling provides immediate pipeline visibility, eliminating the need for page refreshes during long-running traces and enabling seamless HITL gate interaction |
 | **Challenger** | Multi-turn adversarial debate between Synthesiser and Challenger with max 3 debate retries (§5, §6) | Single-sided multi-round adversarial review (MAX_DEBATE_ROUNDS=2). Challenger generates structured JSON critique (issues with type/severity/quote/explanation, overall assessment, recommendation) against the static synthesis using traced evidence. Graceful fallback to coverage-only review without LLM | The DPD specified a bidirectional debate where the Synthesiser would respond to challenges and revise in-place. The implementation uses a single-sided approach: the Challenger critiques, and the **user** decides (at HITL Gate 3) whether to accept or send the synthesis back for revision. This preserves human agency over the revision decision rather than delegating it to an automated Synthesiser response loop |
-| **Drift analysis trigger** | Explicit user choice: "User wants to analyse conceptual drift?" diamond after synthesis approval (§6 activity diagram) | Challenger always runs automatically after synthesis approval — no user opt-in/opt-out gate | The Challenger's adversarial review is lightweight relative to the full tracing pipeline. Making it automatic ensures every synthesis is quality-checked without requiring the user to understand when drift analysis is warranted. The cost (one LLM call) is negligible compared to the tracing phase |
+| **Drift analysis trigger** | Explicit user choice: "User wants to analyse conceptual drift?" diamond after synthesis approval (§6 activity diagram) | Challenger always runs automatically after synthesis approval - no user opt-in/opt-out gate | The Challenger's adversarial review is lightweight relative to the full tracing pipeline. Making it automatic ensures every synthesis is quality-checked without requiring the user to understand when drift analysis is warranted. The cost (one LLM call) is negligible compared to the tracing phase |
 
 ### Pending Features from Design Proposal
 
@@ -210,7 +210,7 @@ The following features specified in the DPD activity diagram (§6) are not yet i
 | Feature | DPD Specification | Current State | Notes |
 |---------|-------------------|---------------|-------|
 | **Synthesiser↔Challenger debate** | Bidirectional multi-turn: Challenger critiques → Synthesiser revises synthesis → Challenger re-evaluates (up to 3 rounds) | Single-sided: Challenger critiques static synthesis; revision only occurs if user rejects at HITL Gate 3 and the pipeline loops back to the Synthesise node | Implementing a bidirectional debate requires either a LangGraph subgraph (nested conversation state) or an inner loop between the synthesise and challenge nodes |
-| **Synthesis retry cap with halt** | "Challenger review > 3" → "Log failure state & halt pipeline" (explicit halt path in diagram) | No explicit cap on the HITL Gate 2 → re-synthesise loop. Bounded only by LangGraph's `max_iterations` parameter, which eventually errors out without a graceful failure message | Requires adding a `synthesiser_retries` counter check in the conditional edge after HITL Gate 2, routing to END with a logged failure state when exceeded |
+| **Synthesis retry cap with halt** | "Challenger review > 3" → "Log failure state & halt pipeline" (explicit halt path in diagram) | Implemented: `_route_after_synthesis_review` and `_route_after_final_review` check `synthesiser_retries >= max_synthesiser_retries` and route to persist with `synthesis_status="partial_consensus"` | Debate terminates gracefully with partial output rather than erroring out via `max_iterations` |
 | **User opt-out of drift analysis** | Diamond gate: "User does NOT want to analyse conceptual drift" → terminate directly without running Challenger | Challenger always runs after synthesis approval. User cannot skip it | Could be implemented as a conditional edge after HITL Gate 2: approved → ask user → challenge or persist directly |
 | **Explicit paper discard logging** | "Discard paper" and "Discard reference" nodes with dedicated loop-back paths when score < threshold or no valid concepts remain | Implicit: low-scoring claims are excluded from TracingResult; papers with no valid claims produce empty results that are still appended to state | The current approach is functionally equivalent but lacks the explicit audit trail of which papers/references were discarded and why |
 | **"No valid Gold Standard" notification** | Dedicated decision path: "no valid gold standard" → "Notify user: No valid Gold Standard found" node | Retriever returns an empty candidate list; user sees 0 candidates at HITL Gate 1 without a specific explanatory message | Requires a conditional check after retrieval with a dedicated error message before presenting HITL Gate 1 |
@@ -332,7 +332,7 @@ concept-genealogy/
 
 ## Graph Visualisation
 
-The genealogy graph builds an inverted semantic provenance graph following the actual citation chain. Edge direction represents "cites" — the seed paper cites its references, which in turn cite their own references:
+The genealogy graph builds an inverted semantic provenance graph following the actual citation chain. Edge direction represents "cites" - the seed paper cites its references, which in turn cite their own references:
 
 ```mermaid
 graph LR
@@ -355,9 +355,9 @@ Nodes are colour-coded by depth (amber → blue → purple → green → red →
 ### Node Labels
 
 Each node displays rich metadata to eliminate the need for cross-referencing:
-- **Title** — paper title (bold, primary label)
-- **First author + year** — authorship and temporal context
-- **DOI link** — clickable external reference
+- **Title** - paper title (bold, primary label)
+- **First author + year** - authorship and temporal context
+- **DOI link** - clickable external reference
 
 ### Edge Labels
 
@@ -369,7 +369,7 @@ Clicking any node highlights the full path from that node back to the seed paper
 
 ### Breadcrumbs
 
-Below the graph, a **breadcrumb trail** shows the concept evolution along the highlighted path — each paper's title in the chain from seed to the selected node, with arrows indicating the direction of the citation chain.
+Below the graph, a **breadcrumb trail** shows the concept evolution along the highlighted path - each paper's title in the chain from seed to the selected node, with arrows indicating the direction of the citation chain.
 
 ---
 
@@ -400,7 +400,7 @@ All external libraries, frameworks, and models used in this project are acknowle
 | **Uvicorn** | ≥0.30 | ASGI server for FastAPI | BSD-3-Clause |
 | **LangGraph** | ≥0.2 | StateGraph execution engine enabling cyclic workflows for HITL loops and recursive citation tracing (Sapkota et al., 2025) | MIT |
 | **LangChain-Core** | ≥0.3 | Foundation dependency for LangGraph's state management primitives | MIT |
-| **Groq** | ≥0.9 | Python client for Groq LPU inference API (Groq, 2025a) — hosts Llama 3.1/3.3 models | Apache-2.0 |
+| **Groq** | ≥0.9 | Python client for Groq LPU inference API (Groq, 2025a) - hosts Llama 3.1/3.3 models | Apache-2.0 |
 | **PyMuPDF (fitz)** | ≥1.24 | PDF text extraction with high fidelity for multi-column academic layouts (Artifex Software, 2026) | AGPL-3.0 |
 | **httpx** | ≥0.27 | HTTP client for Semantic Scholar, CrossRef, and Elsevier API calls (sync mode for LangGraph compatibility) | BSD-3-Clause |
 | **Pydantic** | ≥2.7 | Data validation and schema enforcement at agent boundaries (Atıl et al., 2025) | MIT |
@@ -460,6 +460,20 @@ cd backend
 .venv\Scripts\python.exe -m pytest tests/ -v --tb=short > test-output/test-results.txt 2>&1
 .venv\Scripts\python.exe -m pytest tests/ --cov=. --cov-report=term-missing > test-output/coverage-report.txt 2>&1
 ```
+
+---
+
+## Feedback Remediation
+
+The following changes were applied in response to examiner feedback on the initial submission:
+
+| # | Feedback Item | Change Implemented | Files Modified |
+|---|--------------|-------------------|----------------|
+| 1 | "Reactive agents" / "subsumption architecture" mislabels centralised LangGraph state management | Renamed to **stateless worker nodes** - agents are genuinely stateless (receive input slice, return typed output) but are not subsumption-style because they don't compete for activation; the Orchestrator explicitly routes | `orchestrator.py`, `state.py`, `config.py`, `evaluator.py`, `citation_extractor.py`, `synthesiser.py`, `retriever.py` |
+| 2 | Conceptual drift defined only as a cosine number without qualitative explanation | Added **DRIFT_ANALYSIS_PROMPT** producing three-part qualitative analysis (historical_use, current_use, evolutionary_path) always compared to the gold-standard seed paper definition. Challenger prompts updated with drift definition | `evaluator.py`, `challenger.py`, `state.py` |
+| 3 | Debate retry cap defined (`max_synthesiser_retries=3`) but never enforced in routing | Replaced anonymous Gate 2/3 lambdas with named methods (`_route_after_synthesis_review`, `_route_after_final_review`) that check the retry counter and route to persist with `synthesis_status="partial_consensus"` when cap is reached | `orchestrator.py`, `state.py`, `persistence.py` |
+| 4 | "Graceful degradation" claimed without evidence of explicit error communication | PDF extraction errors now log paper title and specific failure reason (HTTP status, parse error). Abstract fallback logs configurable confidence value. `abstract_confidence` is configurable via `ABSTRACT_CONFIDENCE` env var (default 0.5) with engineering justification | `citation_extractor.py`, `config.py` |
+| 5 | Pipeline iteration limits (3 retries, 2 debate rounds, 1 inspector retry) presented as arbitrary design choices | Comments replaced with engineering justifications grounded in Groq free-tier rate limits (30 req/min for 70b), diminishing LLM output variance beyond 3 iterations (Atıl et al., 2025), and request budget proportionality | `state.py`, `challenger.py` |
 
 ---
 

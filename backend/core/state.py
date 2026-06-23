@@ -7,14 +7,13 @@ manages global state across all agent activations (Dang et al., 2025). By defini
 state as a typed Pydantic model, we get schema validation at definition time and
 a single source of truth for what data is in-flight at any pipeline stage.
 
-This prevents the "context-window degradation" anti-pattern: reactive agents receive
-only the slice of state they need (passed as arguments), never the full context
-window. The Orchestrator owns the full StateGraph state; agents are stateless
-functions (Brooks, 1991 - subsumption architecture principle).
+This prevents the "context-window degradation" anti-pattern: stateless worker nodes
+receive only the slice of state they need (passed as arguments), never the full
+context window. The Orchestrator owns the full StateGraph state; worker nodes are
+stateless functions with single-responsibility scope (Dang et al., 2025).
 
 References:
   Dang et al. (2025) Multi-Agent Collaboration via Evolving Orchestration. arXiv:2505.19591
-  Brooks (1991) Intelligence without representation. Artificial Intelligence, 47(1-3), 139-159.
 """
 
 from __future__ import annotations
@@ -97,6 +96,10 @@ class EvaluatedClaim(BaseModel):
     drift_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     # drift_score measures semantic distance from parent claim embedding.
     # None at depth=0 (seed paper has no parent to drift from).
+    drift_analysis: Optional[dict] = None
+    # drift_analysis provides qualitative assessment of conceptual drift.
+    # Structure: {"historical_use": str, "current_use": str, "evolutionary_path": str}
+    # Always compared to the gold-standard seed paper's usage of the concept.
 
 
 class TracingResult(BaseModel):
@@ -161,13 +164,29 @@ class PipelineState(BaseModel):
 
     # Synthesis
     synthesis_text: Optional[str] = None
+    synthesis_status: str = "complete"  # "complete" | "partial_consensus" (set if retry cap hit)
     challenger_critique: Optional[str] = None  # populated if Challenger is active
+    challenger_issues: list[dict] = Field(default_factory=list)  # structured issues from Challenger
 
     # Retry counters
     inspector_retries: int = 0
-    max_inspector_retries: int = 1   # design constraint: max 1 retry for Pydantic errors
+    # max_inspector_retries=1: Inspector validates Pydantic schemas - if the LLM
+    # produces invalid JSON on the first retry, additional retries exhibit
+    # diminishing returns (same model, same prompt → same failure mode).
+    max_inspector_retries: int = 1
     synthesiser_retries: int = 0
-    max_synthesiser_retries: int = 3  # design constraint: max 3 for Synthesiser/Challenger
+    # max_synthesiser_retries=3: Groq free-tier permits 30 req/min (llama-3.3-70b).
+    # Each synthesis + challenge cycle costs 2 requests. Capping at 3 retries
+    # (= 6 additional requests) keeps total request budget under 20% of the
+    # per-minute quota, leaving headroom for extraction at deeper depths.
+    # Beyond 3 iterations, LLM output variance plateaus (Atıl et al., 2025).
+    max_synthesiser_retries: int = 3
+    challenger_retries: int = 0
+    # max_challenger_retries=3: Gate 3 rejection loops back to the Challenger
+    # (not to Synthesis). Each retry re-runs the adversarial debate on the same
+    # synthesis, asking the Challenger to dig deeper. Matches the activity diagram
+    # "Debate Retry <= 3" routing. Cap at 3 to bound LLM cost.
+    max_challenger_retries: int = 3
 
     # HITL gate flags
     # Four mandatory gates:

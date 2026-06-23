@@ -31,7 +31,7 @@ def mock_groq():
                     "type": "overstated",
                     "severity": "medium",
                     "quote": "definitively proved",
-                    "explanation": "Validity score is only 0.6 — not definitive"
+                    "explanation": "Validity score is only 0.6 - not definitive"
                 }
             ],
             "overall_assessment": "adequate",

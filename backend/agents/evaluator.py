@@ -2,7 +2,7 @@
 agents/evaluator.py - Evaluator agent.
 
 ROLE IN ARCHITECTURE:
-Reactive specialist agent. Receives raw ExtractedClaims from the Citation Extractor
+Stateless worker node. Receives raw ExtractedClaims from the Citation Extractor
 and returns filtered, scored EvaluatedClaims. Acts as an explicit validation gate
 between extraction and synthesis.
 
@@ -65,6 +65,23 @@ Respond with a JSON object with exactly two fields:
 JSON object only, no preamble:"""
 
 
+DRIFT_ANALYSIS_PROMPT = """You are analysing conceptual drift in a citation genealogy.
+
+The gold-standard definition of "{concept}" comes from the seed paper (depth 0).
+The following claim was extracted at depth {depth} (i.e., {depth} citation hops from the seed):
+
+Claim: "{claim}"
+Source paper: "{source_title}"
+
+Compare how this claim uses the concept relative to the seed paper's definition.
+Respond with a JSON object with exactly three fields:
+  - "historical_use": one sentence describing how the seed paper originally defined/used the concept
+  - "current_use": one sentence describing how THIS claim redefines or applies the concept
+  - "evolutionary_path": one sentence explaining the step-by-step transformation from seed usage to current usage through the citation chain
+
+JSON object only, no preamble:"""
+
+
 class EvaluatorAgent:
     """
     Filters and scores extracted claims for relevance and validity.
@@ -73,7 +90,7 @@ class EvaluatorAgent:
     Relevance classification and validity scoring are binary/scalar tasks that
     do not require the comparative reasoning capabilities of the larger model.
     Using 8b here keeps token costs proportional (design proposal 3):
-    "assigning lightweight models to reactive agents and larger models only
+    "assigning lightweight models to stateless worker nodes and larger models only
     where comparative reasoning is required."
     """
 
@@ -214,8 +231,11 @@ class EvaluatorAgent:
 
         # Compute drift score at depth > 0 if embedding model is available
         drift_score = None
+        drift_analysis = None
         if depth > 0 and self.embedding_model is not None:
             drift_score = self._compute_drift_score(claim, user_concept)
+        if depth > 0 and self.groq is not None:
+            drift_analysis = self._compute_drift_analysis(claim, user_concept, depth)
 
         return EvaluatedClaim(
             claim_text=claim.claim_text,
@@ -225,6 +245,7 @@ class EvaluatorAgent:
             validity_score=validity_score,
             relevant_concepts=relevant_concepts,
             drift_score=drift_score,
+            drift_analysis=drift_analysis,
         )
 
     def _compute_drift_score(
@@ -262,4 +283,44 @@ class EvaluatorAgent:
 
         except Exception as e:
             logger.warning("Evaluator: drift computation failed: %s", e)
+            return None
+
+    def _compute_drift_analysis(
+        self,
+        claim: ExtractedClaim,
+        user_concept: str,
+        depth: int,
+    ) -> dict | None:
+        """
+        Produce qualitative drift analysis comparing claim usage to seed paper.
+
+        Returns a dict with keys: historical_use, current_use, evolutionary_path.
+        Always compares to the gold-standard seed paper definition.
+        """
+        prompt = DRIFT_ANALYSIS_PROMPT.format(
+            concept=user_concept,
+            depth=depth,
+            claim=claim.claim_text,
+            source_title=claim.source_title,
+        )
+        try:
+            import json as _json
+            from agents.inspector import InspectorAgent
+
+            response = self.groq.chat_completion(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=300,
+            )
+            raw_output = response.choices[0].message.content
+            cleaned = InspectorAgent._clean_json_string(raw_output)
+            parsed = _json.loads(cleaned)
+            # Validate expected keys
+            if all(k in parsed for k in ("historical_use", "current_use", "evolutionary_path")):
+                return parsed
+            logger.warning("Evaluator: drift analysis missing keys, skipping")
+            return None
+        except Exception as e:
+            logger.warning("Evaluator: drift analysis LLM call failed: %s", e)
             return None

@@ -42,11 +42,12 @@ class TestRetrieverInit:
 
 
 class TestParsePaper:
-    """Tests for _parse_paper static method."""
+    """Tests for _parse_paper method."""
 
-    def test_parses_full_response(self, sample_s2_paper_response):
+    def test_parses_full_response(self, base_config, sample_s2_paper_response):
         """Parses all fields from a complete S2 API response."""
-        paper = RetrieverAgent._parse_paper(sample_s2_paper_response)
+        agent = RetrieverAgent(base_config)
+        paper = agent._parse_paper(sample_s2_paper_response)
         assert isinstance(paper, CandidatePaper)
         assert paper.paper_id == "204e3073870fae3d05bcbc2f6a8e263d9b72e776"
         assert paper.title == "Attention Is All You Need"
@@ -56,22 +57,24 @@ class TestParsePaper:
         assert paper.doi == "10.48550/arXiv.1706.03762"
         assert len(paper.authors) == 3
 
-    def test_handles_missing_optional_fields(self):
+    def test_handles_missing_optional_fields(self, base_config):
         """Gracefully handles missing optional fields in S2 response."""
+        agent = RetrieverAgent(base_config)
         minimal = {
             "paperId": "abc",
             "title": "Minimal Paper",
             "authors": [],
         }
-        paper = RetrieverAgent._parse_paper(minimal)
+        paper = agent._parse_paper(minimal)
         assert paper.paper_id == "abc"
         assert paper.year is None
         assert paper.open_access_url is None
         assert paper.doi is None
         assert paper.citation_count == 0
 
-    def test_handles_null_open_access_pdf(self):
+    def test_handles_null_open_access_pdf(self, base_config):
         """openAccessPdf can be null (closed-access paper)."""
+        agent = RetrieverAgent(base_config)
         raw = {
             "paperId": "xyz",
             "title": "Closed Paper",
@@ -81,9 +84,26 @@ class TestParsePaper:
             "openAccessPdf": None,
             "externalIds": {"DOI": "10.1000/test"},
         }
-        paper = RetrieverAgent._parse_paper(raw)
+        paper = agent._parse_paper(raw)
         assert paper.open_access_url is None
         assert paper.doi == "10.1000/test"
+
+    def test_attaches_sjr_score_from_venue(self, base_config):
+        """SJR score is attached when the venue matches the SJR index."""
+        agent = RetrieverAgent(base_config)
+        raw = {
+            "paperId": "sjr_test",
+            "title": "SJR Test Paper",
+            "authors": [{"name": "Author"}],
+            "year": 2023,
+            "citationCount": 100,
+            "openAccessPdf": None,
+            "publicationVenue": {"name": "Nature Reviews Molecular Cell Biology"},
+            "externalIds": {},
+        }
+        paper = agent._parse_paper(raw)
+        assert paper.sjr_score is not None
+        assert paper.sjr_score > 30  # Known to be ~35.568
 
 
 class TestSJRRanking:

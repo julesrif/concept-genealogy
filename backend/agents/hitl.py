@@ -123,7 +123,7 @@ class HITLGate:
             except ValueError:
                 print("Invalid input. Enter a number, 'r', or 'q'.")
 
-    def gate_2_synthesis_approval(self, synthesis_text: str | None) -> bool:
+    def gate_2_synthesis_approval(self, synthesis_text: str | None, tracing_papers: list | None = None) -> bool:
         """
         Gate 2: present synthesis to user and request approval.
 
@@ -206,6 +206,7 @@ class HITLGate:
         self,
         synthesis_text: str | None,
         challenger_critique: str | None,
+        challenger_issues: list[dict] | None = None,
     ) -> bool:
         """
         Gate 3: present final output (synthesis + challenger critique) for approval.
