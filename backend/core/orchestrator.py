@@ -245,16 +245,16 @@ class Orchestrator:
             )
             self._progress(
                 "No references found for the seed paper. "
-                "Try a different seed paper or concept.",
+                "Please select a different seed paper.",
                 "ERROR"
             )
-            state["stage"] = PipelineStage.FAILED.value
+            state["seed_tracing_failed"] = True
             state["error_message"] = (
                 "No references found for the seed paper in Semantic Scholar. "
                 "Concept genealogy requires at least first-order references. "
-                "Try a different seed paper or concept query."
+                "Please select a different seed paper."
             )
-            return END
+            return "hitl_gate_1"
 
         # If we've reached the depth cap or no new refs, tracing is complete
         if current_depth > max_depth or not all_new_refs:
@@ -492,7 +492,36 @@ class Orchestrator:
 
     def _node_hitl_gate_1(self, state: PipelineState) -> PipelineState:
         """HITL Gate 1: present candidates to user, await seed selection."""
-        approved, selected = self.hitl.gate_1_seed_selection(state.candidate_papers)
+        gate_message = None
+
+        # If re-entering after a failed seed, reset tracing state and remove
+        # the failed paper from candidates so the user picks a different one.
+        if state.seed_tracing_failed:
+            gate_message = state.error_message
+            failed_id = state.selected_seed.paper_id if state.selected_seed else None
+            if failed_id:
+                state.candidate_papers = [
+                    p for p in state.candidate_papers
+                    if p.paper_id != failed_id
+                ]
+            state.selected_seed = None
+            state.current_depth = 0
+            state.tracing_results = []
+            state.visited_paper_ids = set()
+            state.pending_papers_at_depth = []
+            state.concept_at_depth = {}
+            state.seed_tracing_failed = False
+            state.error_message = None
+            state.stage = PipelineStage.AWAITING_SEED
+
+            if not state.candidate_papers:
+                # All candidates exhausted - fall back to re-retrieval
+                state.hitl_gate_1_approved = False
+                return state
+
+        approved, selected = self.hitl.gate_1_seed_selection(
+            state.candidate_papers, message=gate_message
+        )
         state.hitl_gate_1_approved = approved
         if approved:
             state.selected_seed = selected
@@ -651,7 +680,7 @@ class Orchestrator:
 
     def _node_hitl_gate_2(self, state: PipelineState) -> PipelineState:
         """HITL Gate 2: present synthesis to user, await approval."""
-        # Build summary of traced papers for display alongside the synthesis
+        # Build summary of traced papers that contributed claims
         tracing_papers = [
             {
                 "paper_title": r.paper_title,
@@ -662,6 +691,7 @@ class Orchestrator:
                 "num_claims": len(r.claims),
             }
             for r in state.tracing_results
+            if r.claims
         ]
         approved = self.hitl.gate_2_synthesis_approval(
             state.synthesis_text, tracing_papers=tracing_papers

@@ -51,6 +51,9 @@
       <!-- HITL Gate 1: Seed Selection -->
       <div v-if="run.current_gate?.gate_type === 'seed_selection'" class="card gate-card">
         <h3>🎯 Gate 1: Select Seed Paper</h3>
+        <div v-if="run.current_gate.message" class="gate-error">
+          <p class="error">⚠️ {{ run.current_gate.message }}</p>
+        </div>
         <p class="gate-desc">
           Choose a paper to use as the starting point for citation tracing.
         </p>
@@ -70,8 +73,8 @@
               <span>Year: {{ paper.year || 'N/A' }}</span>
               <span>Citations: {{ paper.citation_count || 0 }}</span>
               <span v-if="paper.sjr_score" class="sjr-score">SJR: {{ paper.sjr_score.toFixed(2) }}</span>
-              <span :class="paper.open_access_url ? 'oa-yes' : paper.doi ? 'oa-elsevier' : 'oa-no'">
-                {{ paper.open_access_url ? '✓ Open Access' : paper.doi ? '✓ Elsevier (via DOI)' : '✗ Abstract only' }}
+              <span :class="paper.open_access_url ? 'oa-yes' : paper.doi ? 'oa-doi' : 'oa-no'">
+                {{ paper.open_access_url ? '✓ Open Access' : paper.doi ? '✓ Full-text (via DOI)' : '✗ Abstract only' }}
               </span>
               <a
                 v-if="paper.doi"
@@ -138,8 +141,8 @@
         </div>
       </div>
 
-      <!-- Tracing Progress (visible during tracing stage) -->
-      <div v-if="run.stage === 'tracing' && tracingProgress.currentDepth >= 0" class="card tracing-progress-card">
+      <!-- Tracing Progress (visible during tracing stage, hidden when a gate is active) -->
+      <div v-if="run.stage === 'tracing' && !run.current_gate && tracingProgress.currentDepth >= 0" class="card tracing-progress-card">
         <h3>🔍 Tracing Citations</h3>
         <div class="tracing-stats">
           <div class="tracing-stat">
@@ -820,6 +823,20 @@ onUnmounted(() => {
   font-size: 0.875rem;
 }
 
+.gate-error {
+  background: var(--color-danger-bg, rgba(239, 68, 68, 0.1));
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.gate-error .error {
+  margin: 0;
+  color: var(--color-danger, #ef4444);
+  font-size: 0.875rem;
+}
+
 .candidates {
   display: flex;
   flex-direction: column;
@@ -882,7 +899,7 @@ onUnmounted(() => {
   color: var(--color-success);
 }
 
-.oa-elsevier {
+.oa-doi {
   color: var(--color-success);
 }
 

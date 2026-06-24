@@ -368,37 +368,53 @@ class RetrieverAgent:
         if self.api_key:
             headers["x-api-key"] = self.api_key
 
-        try:
-            with httpx.Client(timeout=30.0, verify=False) as client:
-                response = client.post(
-                    f"{self.SEMANTIC_SCHOLAR_BASE}/paper/batch",
-                    json={"ids": doi_ids},
-                    params={"fields": "paperId"},
-                    headers=headers,
+        retry_delays = [2.0, 5.0, 10.0, 20.0]
+
+        for attempt, delay in enumerate([0] + retry_delays):
+            if delay:
+                logger.warning(
+                    "S2 batch endpoint rate-limited - waiting %.1fs before retry %d/%d",
+                    delay, attempt, len(retry_delays)
                 )
+                self._progress(
+                    f"Rate limited by Semantic Scholar batch - waiting {delay:.0f}s (retry {attempt}/{len(retry_delays)})...",
+                    "WARNING",
+                )
+                time.sleep(delay)
 
-            if response.status_code == 429:
-                logger.warning("S2 batch endpoint rate-limited during CrossRef fallback")
+            try:
+                with httpx.Client(timeout=30.0, verify=False) as client:
+                    response = client.post(
+                        f"{self.SEMANTIC_SCHOLAR_BASE}/paper/batch",
+                        json={"ids": doi_ids},
+                        params={"fields": "paperId"},
+                        headers=headers,
+                    )
+
+                if response.status_code == 429:
+                    continue
+
+                if response.status_code != 200:
+                    logger.debug("S2 batch: status %d", response.status_code)
+                    return []
+
+                papers = response.json()
+                result = [
+                    p["paperId"] for p in papers
+                    if p is not None and p.get("paperId")
+                ]
+                logger.info(
+                    "CrossRef fallback: resolved %d/%d DOIs to S2 paper IDs",
+                    len(result), len(doi_ids)
+                )
+                return result[:limit]
+
+            except httpx.RequestError as e:
+                logger.warning("S2 batch: connection error: %s", e)
                 return []
 
-            if response.status_code != 200:
-                logger.debug("S2 batch: status %d", response.status_code)
-                return []
-
-            papers = response.json()
-            result = [
-                p["paperId"] for p in papers
-                if p is not None and p.get("paperId")
-            ]
-            logger.info(
-                "CrossRef fallback: resolved %d/%d DOIs to S2 paper IDs",
-                len(result), len(doi_ids)
-            )
-            return result[:limit]
-
-        except httpx.RequestError as e:
-            logger.warning("S2 batch: connection error: %s", e)
-            return []
+        logger.error("S2 batch: all retries exhausted for DOI resolution")
+        return []
 
     def _parse_paper(self, raw: dict) -> CandidatePaper:
         """Convert raw Semantic Scholar API response to typed CandidatePaper."""

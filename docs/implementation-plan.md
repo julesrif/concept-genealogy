@@ -34,7 +34,7 @@ Documentation + testing evidence + presentation
 - [x] Technology Stack & Acknowledgments - all libraries/models/APIs with licenses
 - [x] Code comments - all backend agents have "why" docstrings with Harvard citations
 - [x] Code comments - all Vue components have design-decision header comments
-- [x] Test evidence - pytest output saved (128 tests passing, `backend/test-output/test-results.txt`)
+- [x] Test evidence - pytest output saved (129 tests passing, `backend/test-output/test-results.txt`)
 - [x] Coverage report saved (63% overall, `backend/test-output/coverage-report.txt`)
 - [x] Frontend - Vue 3 SPA with live pipeline monitoring, interactive HITL gates, graph visualisation
 - [ ] PowerPoint deck - 10 slides max, covers all grading criteria

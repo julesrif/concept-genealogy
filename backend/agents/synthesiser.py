@@ -49,13 +49,15 @@ of the concept "{concept}" based EXCLUSIVELY on the extracted claims provided be
 
 STRICT RULES:
 - Use ONLY the claims provided. Do NOT use your general knowledge about the concept.
-- If a claim is used, cite its source in the format [Source: <paper_title>, depth=<depth>].
+- If a claim is used, cite its source using the numbered reference format [N] where N is
+  the reference number shown before each paper's claims below.
 - If the claims are insufficient to write a full genealogy, say so explicitly and summarise
   only what the available claims actually support. Do NOT fill gaps with general knowledge.
 - Never write phrases like "typically", "generally understood as", or "would expect to find"
   - these signal you are drawing on parametric knowledge rather than the provided claims.
 
 The claims below are organised by depth (0 = seed paper, 1 = direct references, 2+ = deeper sources).
+Each paper is assigned a reference number [N] - use this number when citing claims from that paper.
 
 Write a coherent 4-6 paragraph academic synthesis that:
 1. Introduces the concept as defined in the seed paper claims (depth=0)
@@ -66,7 +68,7 @@ Write a coherent 4-6 paragraph academic synthesis that:
 Extracted claims (organised by depth):
 {claims_by_depth}
 
-Synthesis (grounded claims only - no general knowledge):"""
+Synthesis (grounded claims only - no general knowledge, cite with [N]):"""
 
 
 class SynthesiserAgent:
@@ -170,6 +172,10 @@ class SynthesiserAgent:
         """
         Format evaluated claims grouped by depth level for the synthesis prompt.
 
+        Each paper with claims is assigned a sequential reference number [N]
+        matching the numbering used in the Gate 2 reference list. Papers with
+        no claims are excluded since they cannot contribute to synthesis.
+
         WHY GROUP BY DEPTH:
         The synthesis prompt instructs the model to trace how the concept
         evolved across depth levels. Providing claims pre-grouped by depth
@@ -177,15 +183,17 @@ class SynthesiserAgent:
         conflate claims from different genealogical levels.
         """
         sections: list[str] = []
+        ref_num = 0
         for result in sorted(tracing_results, key=lambda r: r.depth):
-            depth_label = "Seed paper" if result.depth == 0 else f"Depth {result.depth}"
-            header = f"\n--- {depth_label}: {result.paper_title} ---"
             claim_lines = [
                 f"  - [{c.validity_score:.2f}] {c.claim_text}"
                 for c in result.claims
                 if c.claim_text.strip()
             ]
             if claim_lines:
+                ref_num += 1
+                depth_label = "Seed paper" if result.depth == 0 else f"Depth {result.depth}"
+                header = f"\n--- [{ref_num}] {depth_label}: {result.paper_title} ---"
                 sections.append(header + "\n" + "\n".join(claim_lines))
 
         return "\n".join(sections) if sections else "(no claims)"

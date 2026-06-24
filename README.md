@@ -91,10 +91,10 @@ graph TB
 
 The pipeline pauses at mandatory decision points requiring user approval (Mosqueira-Rey et al., 2023):
 
-1. **Seed Selection** (concept mode) - User confirms or rejects the top-ranked seed paper
+1. **Seed Selection** (concept mode) - User confirms or rejects the top-ranked seed paper. If seed tracing fails (no full-text available), the pipeline redirects back to this gate with an error message so the user can select an alternative paper
 1. **Concept Selection** (DOI mode) - User selects up to 3 concepts to trace from the provided paper
-2. **Graph Review** - User reviews the citation tracing tree before synthesis. This gate prevents unnecessary Synthesiser/Challenger invocations (the most expensive 70b model calls) when the graph is incomplete or structurally incorrect
-3. **Synthesis Approval** - User accepts or requests revision of the narrative
+2. **Graph Review** - User reviews the citation tracing tree before synthesis. Papers with zero extracted claims are filtered out. This gate prevents unnecessary Synthesiser/Challenger invocations (the most expensive 70b model calls) when the graph is incomplete or structurally incorrect
+3. **Synthesis Approval** - User accepts or requests revision of the narrative. The synthesis uses numbered citations `[N]` that map to the reference list displayed alongside it
 4. **Final Approval** - User signs off on the complete output (with challenger critique)
 
 ### Execution Workflow
@@ -173,8 +173,8 @@ sequenceDiagram
 | **Centralised orchestration** | Prevents context-window degradation; agents receive only their required state slice (Dang et al., 2025) |
 | **Groq inference (not OpenAI)** | Free-tier availability for academic use; LPU architecture ensures low-latency execution vital for agent coordination (Groq, 2025a) under academic-friendly license (Groq, 2025b) |
 | **Recursive citation tracing** | Depth-bounded traversal with configurable fan-out (`papers_per_level=3`) at each level; constrained snowball sampling prevents citation-graph explosion (Lecy and Beatty, 2012). At each depth transition, concept abstraction adapts the search concept to ancestral terminology |
-| **Three-strategy content fallback** | OA PDF → Elsevier API via DOI → abstract-only. Most journal papers are not available in Open Access; Elsevier institutional API enables full-text extraction for paywalled papers, maximising coverage |
-| **CrossRef reference fallback** | Semantic Scholar's reference index has coverage gaps - some highly-cited papers return zero references despite having extensive bibliographies. CrossRef serves as the primary reference source: reference DOIs are fetched from publisher-deposited metadata and batch-resolved back to Semantic Scholar paper IDs. CrossRef has no rate limit, preserving the S2 budget for paper metadata. S2 `/references` is used as fallback when no DOI is available |
+| **Four-strategy content fallback** | OA PDF → Elsevier API → DOI direct PDF → abstract-only. Most journal papers are not available in Open Access; Elsevier institutional API enables full-text extraction for paywalled papers. For papers not covered by Elsevier, the system follows the DOI URL with an `Accept: application/pdf` header - many publishers (e.g., Annual Reviews) serve PDFs directly via content negotiation, maximising coverage without requiring additional API keys |
+| **CrossRef reference fallback** | Semantic Scholar's reference index has coverage gaps - some highly-cited papers return zero references despite having extensive bibliographies. CrossRef serves as the primary reference source: reference DOIs are fetched from publisher-deposited metadata and batch-resolved back to Semantic Scholar paper IDs via `/paper/batch` with exponential backoff retry (delays: 2s, 5s, 10s, 20s) on 429 responses. CrossRef has no rate limit, preserving the S2 budget for paper metadata. S2 `/references` is used as fallback when no DOI is available |
 | **SJR-ranked reference selection** | When `papers_per_level` limits how many references are traced at each depth, the system fetches metadata for all candidate references and ranks them by SCImago Journal Rank before selecting the top-N, ensuring the highest-quality citation chains are followed first |
 | **Depth-adaptive concept abstraction** | Modern terminology often did not exist in older papers. At each depth transition, the LLM identifies the precursor concept from extracted claims (e.g., "attention mechanism" → "selective attention" → "feature-based saliency"). The Evaluator uses this abstracted term for relevance matching, preventing valid ancestral papers from being discarded due to terminology mismatch |
 | **Local SJR CSV** | Avoids runtime HTTP dependency for journal ranking; SCImago dataset bundled in `data/` (SCImago, n.d.) |
@@ -192,7 +192,7 @@ The following enhancements were made during implementation beyond the original d
 | Area | Proposal | Implementation | Rationale |
 |------|----------|----------------|-----------|
 | **HITL Gates** | 3 gates (seed, synthesis, final) | 4 gates (added Graph Review before synthesis) | The Synthesiser (70b) and Challenger (70b) are the most expensive pipeline stages. Presenting the citation graph for user review before invoking these models prevents wasted LLM calls on an incomplete or structurally incorrect tracing tree - the user can reject early at near-zero cost |
-| **Content fallback** | Semantic Scholar resolves OA PDFs natively (AI2, 2023; arXiv, n.d.) | OA PDF → Elsevier API → abstract-only fallback chain | The majority of journal papers are not available in Open Access. Since institutional Elsevier API access permits full-text data mining by DOI, adding this fallback significantly increases the proportion of papers from which claims can be extracted at full confidence |
+| **Content fallback** | Semantic Scholar resolves OA PDFs natively (AI2, 2023; arXiv, n.d.) | OA PDF → Elsevier API → DOI direct PDF → abstract-only fallback chain | The majority of journal papers are not available in Open Access. Elsevier API enables full-text extraction for paywalled papers. For papers not covered by OA or Elsevier (e.g., Annual Reviews, Nature), following the DOI URL with `Accept: application/pdf` exploits publisher content negotiation to retrieve freely available PDFs without additional API keys. Abstract-only is the final fallback with reduced confidence |
 | **Reference retrieval** | Semantic Scholar `/references` endpoint only | CrossRef API primary → S2 `/references` fallback | Semantic Scholar has indexing gaps where peer-reviewed papers with extensive bibliographies return zero references. CrossRef receives publisher-deposited reference metadata directly from Elsevier, Springer, and Wiley, providing near-complete coverage. CrossRef is queried first (no rate limit), preserving the S2 rate budget for paper metadata fetches. DOIs are batch-resolved to S2 paper IDs via the `/paper/batch` endpoint |
 | **Reference selection** | Arbitrary ordering (first N references) | SJR-ranked selection at each depth level | When `papers_per_level` limits how many references are traced, selecting the first N arbitrarily may follow low-quality citation chains. The system now fetches metadata for candidate references and ranks them by SJR before selecting the top-N, ensuring the highest-quality journals are traced preferentially (SCImago, n.d.) |
 | **Concept abstraction** | Static concept matching across all depths | Depth-adaptive concept abstraction via LLM | As citation tracing moves backward in time, modern terminology often did not exist in older papers (e.g., "attention mechanism" → "selective attention" → "feature-based saliency"). Without adapting the search concept, the relevance filter discards ancestral papers using older terminology. At each depth transition, the LLM identifies the precursor concept from extracted claims, and the Evaluator uses this abstracted term for relevance matching at the next depth |
@@ -305,7 +305,7 @@ concept-genealogy/
 │   │   └── state.py              # Global pipeline state schema
 │   ├── agents/
 │   │   ├── retriever.py          # Semantic Scholar search + SJR ranking
-│   │   ├── citation_extractor.py # PDF/Elsevier/abstract claim extraction
+│   │   ├── citation_extractor.py # PDF/Elsevier/DOI-PDF/abstract claim extraction
 │   │   ├── evaluator.py          # Relevance filtering + validity scoring
 │   │   ├── inspector.py          # Schema validation + retry logic
 │   │   ├── synthesiser.py        # Grounded narrative generation

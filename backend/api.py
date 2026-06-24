@@ -68,6 +68,7 @@ class GateRequest(BaseModel):
     tracing_papers: list[dict] = Field(default_factory=list)  # Gate 2: traced papers summary
     challenger_critique: Optional[str] = None              # Gate 3
     challenger_issues: list[dict] = Field(default_factory=list)  # Gate 3 structured issues
+    message: Optional[str] = None  # Error/info message shown at gate re-entry
 
 
 class RunStatus(str, Enum):
@@ -225,11 +226,12 @@ class WebHITLGate:
         self.store = store
 
     def gate_1_seed_selection(
-        self, candidates: list[CandidatePaper]
+        self, candidates: list[CandidatePaper], message: str | None = None
     ) -> tuple[bool, Optional[CandidatePaper]]:
         gate = GateRequest(
             gate_type=GateType.SEED_SELECTION,
             candidates=[c.dict() for c in candidates],
+            message=message,
         )
         self.store.set_gate(self.run_id, gate)
         response = self.store.wait_for_gate_response(self.run_id)

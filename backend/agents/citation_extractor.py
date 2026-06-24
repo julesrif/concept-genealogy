@@ -129,7 +129,12 @@ class CitationExtractorAgent:
                     len(text), paper.title
                 )
 
-        # Strategy 3: Abstract-only fallback
+        # Strategy 3: Direct DOI PDF download (many publishers serve free PDFs)
+        if not text.strip() and paper.doi:
+            logger.info("CitationExtractor: trying direct DOI PDF for '%s'", paper.doi)
+            text, confidence = self._extract_from_doi_pdf(paper.doi, paper.title)
+
+        # Strategy 4: Abstract-only fallback
         if not text.strip():
             text = paper.abstract or ""
             confidence = self.abstract_confidence
@@ -209,6 +214,67 @@ class CitationExtractorAgent:
                 "Continuing with remaining extraction strategies.",
                 title, e,
             )
+            return "", 0.0
+
+    def _extract_from_doi_pdf(self, doi: str, title: str = "") -> tuple[str, float]:
+        """
+        Attempt to download a PDF by following the DOI redirect.
+
+        Many publishers (Annual Reviews, PNAS, etc.) serve free PDFs that are
+        not indexed in Semantic Scholar's openAccessPdf field. This follows the
+        DOI URL, checks if the final response is a PDF, and extracts text.
+        """
+        try:
+            import fitz  # PyMuPDF
+
+            doi_url = f"https://doi.org/{doi}"
+            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                # First try: see if the DOI resolves to a page with a PDF link
+                response = client.get(doi_url, headers={
+                    "Accept": "application/pdf",
+                    "User-Agent": "ConceptGenealogy/1.0 (academic research)",
+                })
+
+                if response.status_code != 200:
+                    return "", 0.0
+
+                content_type = response.headers.get("content-type", "")
+                if "application/pdf" not in content_type:
+                    logger.debug(
+                        "CitationExtractor: DOI %s did not return PDF (content-type: %s)",
+                        doi, content_type
+                    )
+                    return "", 0.0
+
+                pdf_bytes = response.content
+
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(pdf_bytes)
+                tmp_path = tmp.name
+
+            doc = fitz.open(tmp_path)
+            text_parts = []
+            for page in doc:
+                text_parts.append(page.get_text())
+            doc.close()
+            Path(tmp_path).unlink(missing_ok=True)
+
+            full_text = "\n".join(text_parts)
+            if len(full_text.strip()) < 200:
+                logger.debug("CitationExtractor: DOI PDF text too short for '%s'", title)
+                return "", 0.0
+
+            truncated = full_text[:self.max_text_chars]
+            logger.info(
+                "CitationExtractor: DOI PDF provided %d chars for '%s'",
+                len(truncated), title
+            )
+            return truncated, 1.0
+
+        except ImportError:
+            return "", 0.0
+        except Exception as e:
+            logger.debug("CitationExtractor: DOI PDF failed for '%s': %s", title, e)
             return "", 0.0
 
     def _llm_extract_claims(self, text: str, title: str) -> list[dict]:

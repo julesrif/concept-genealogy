@@ -53,7 +53,7 @@ class HITLGate:
     """
 
     def gate_1_seed_selection(
-        self, candidates: list[CandidatePaper]
+        self, candidates: list[CandidatePaper], message: str | None = None
     ) -> tuple[bool, CandidatePaper | None]:
         """
         Gate 1: present top-N candidate papers and request seed selection.
@@ -65,6 +65,8 @@ class HITLGate:
         print("\n" + "=" * 60)
         print("HITL GATE 1 - Seed Paper Selection")
         print("=" * 60)
+        if message:
+            print(f"\n⚠️  {message}\n")
         print(f"\nFound {len(candidates)} candidate papers for your concept:\n")
 
         for i, paper in enumerate(candidates, start=1):

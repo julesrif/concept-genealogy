@@ -147,6 +147,7 @@ class PipelineState(BaseModel):
     candidate_papers: list[CandidatePaper] = Field(default_factory=list)
     selected_seed: Optional[CandidatePaper] = None
     max_candidates: int = 3  # design constraint: present top-3 to user
+    seed_tracing_failed: bool = False  # set when seed paper yields no refs, triggers Gate 1 re-entry
 
     # Recursive tracing
     current_depth: int = 0

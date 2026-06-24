@@ -79,13 +79,13 @@ Audit all external API interactions for similar silent-retry patterns. Consider 
 |-----------|--------|
 | **What** | HITL Gate 2 (Synthesis Approval) displayed only the synthesis text. Users had no way to verify which papers the synthesis was based on, their depth in the citation chain, or how many claims were extracted from each. They had to approve the synthesis "blind" without seeing the evidence base. |
 | **Root Cause** | `gate_2_synthesis_approval()` only received and passed `synthesis_text`. The `tracing_results` were available in `PipelineState` but never included in the `GateRequest` payload sent to the frontend. |
-| **Fix** | Added `tracing_papers: list[dict]` to `GateRequest`. The orchestrator now extracts paper metadata (title, authors, depth, DOI, claim count) from `state.tracing_results` and passes it to Gate 2. Frontend renders a styled reference list below the synthesis showing `[n] Title - Authors (Depth X, N claims) DOI: link`. |
+| **Fix** | Added `tracing_papers: list[dict]` to `GateRequest`. The orchestrator now extracts paper metadata (title, authors, depth, DOI, claim count) from `state.tracing_results` and passes it to Gate 2. Frontend renders a styled reference list below the synthesis showing `[n] Title - Authors (Depth X, N claims) DOI: link`. The Synthesiser's prompt was subsequently updated to use numbered `[N]` citations matching the reference list, providing inline claim-level provenance within the narrative itself. |
 
 **So What - Explainable AI:**
 This is a critical XAI gap. The synthesis is the AI's primary output, but without showing *which evidence* produced it, the user cannot evaluate whether the AI's reasoning chain is sound. Displaying the traced papers with their depth and claim counts provides *provenance transparency* - the user can now trace the synthesis back to its evidence sources. This aligns with the XAI principle of *source attribution* (Arrieta et al., 2020) and enables the user to identify if the synthesis over-relies on a single paper or ignores deep-chain evidence.
 
 **Now What:**
-Consider adding inline citation markers within the synthesis text itself (e.g., `[1]`, `[2]`) that map to the reference list. This would provide *claim-level* rather than *document-level* explainability, showing exactly which paper supports each synthesised statement.
+The numbered citation markers `[N]` within the synthesis text now provide *claim-level* rather than *document-level* explainability, showing exactly which paper supports each synthesised statement. The reference numbers are consistent between the synthesis body and the reference list displayed alongside it. Future work could add hover tooltips on `[N]` markers showing the specific claim text that supports each citation.
 
 ---
 
