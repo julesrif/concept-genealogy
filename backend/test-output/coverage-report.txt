@@ -1,8 +1,8 @@
-﻿============================= test session starts =============================
+============================= test session starts =============================
 platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.6.0
-rootdir: C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend
-plugins: anyio-4.13.0, langsmith-0.8.15, cov-5.0.0
-collected 128 items
+rootdir: C:\Users\Julio\Nextcloud\Essex\Modules\4 - Intelligent Agents\Tarea 2 - individual project presentation\concept-genealogy\backend
+plugins: anyio-4.14.1, langsmith-0.9.3, cov-5.0.0
+collected 129 items
 
 tests\test_api.py .....................                                  [ 16%]
 tests\test_challenger.py ..............                                  [ 27%]
@@ -10,121 +10,32 @@ tests\test_citation_extractor.py ...........                             [ 35%]
 tests\test_evaluator.py .........                                        [ 42%]
 tests\test_golden_fixture.py .....                                       [ 46%]
 tests\test_inspector.py ....................                             [ 62%]
-tests\test_persistence.py ...............                                [ 74%]
-tests\test_retriever.py .............                                    [ 84%]
+tests\test_persistence.py ...............                                [ 73%]
+tests\test_retriever.py ..............                                   [ 84%]
 tests\test_state.py ....................                                 [100%]
-
-============================== warnings summary ===============================
-.venv\Lib\site-packages\fastapi\testclient.py:1
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
-    from starlette.testclient import TestClient as TestClient  # noqa
-
-core\config.py:36
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:36: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_api_key: str = Field(..., env="GROQ_API_KEY")
-
-core\config.py:41
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:41: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_model_fast: str = Field(
-
-core\config.py:47
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:47: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_model_reasoning: str = Field(
-
-core\config.py:55
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:55: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    semantic_scholar_api_key: str = Field(default="", env="SEMANTIC_SCHOLAR_API_KEY")
-
-core\config.py:62
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:62: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    elsevier_api_key: str = Field(default="", env="ELSEVIER_API_KEY")
-
-core\config.py:65
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:65: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    max_depth: int = Field(default=3, env="MAX_DEPTH")
-
-core\config.py:66
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:66: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
-
-core\config.py:72
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:72: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    sjr_csv_path: str = Field(
-
-core\config.py:78
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:78: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    database_url: str = Field(
-
-core\config.py:82
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:82: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    output_dir: str = Field(default="output", env="OUTPUT_DIR")
-
-core\config.py:85
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:85: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    log_level: str = Field(default="INFO", env="LOG_LEVEL")
-
-core\config.py:21
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:21: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    class Config(BaseSettings):
-
-core\state.py:114
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\state.py:114: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    class PipelineState(BaseModel):
-
-tests/test_api.py::TestStartRun::test_start_with_concept
-tests/test_api.py::TestStartRun::test_start_with_doi
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:441: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    config_dict = config.dict()
-
-tests/test_api.py::TestGateResponse::test_respond_while_awaiting
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:484: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    run_store.respond_to_gate(run_id, response.dict())
-
-tests/test_api.py::TestWebHITLGate::test_gate_1_approve
-tests/test_api.py::TestWebHITLGate::test_gate_1_approve
-tests/test_api.py::TestWebHITLGate::test_gate_1_reject
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:230: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    candidates=[c.dict() for c in candidates],
-
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\storage\persistence.py:165: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    "seed_paper": state.selected_seed.dict() if state.selected_seed else None,
-
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\storage\persistence.py:171: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    "claims": [c.dict() for c in r.claims],
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 
 ---------- coverage: platform win32, python 3.12.10-final-0 ----------
 Name                               Stmts   Miss  Cover   Missing
 ----------------------------------------------------------------
 __init__.py                            0      0   100%
 agents\__init__.py                     0      0   100%
-agents\challenger.py                  91      1    99%   209
-agents\citation_extractor.py         100     24    76%   92-94, 121-126, 138-139, 179, 187-188, 192-194, 232-234, 255, 267-269
+agents\challenger.py                 106      2    98%   189, 262
+agents\citation_extractor.py         138     50    64%   93-95, 122-127, 148-149, 189, 197-203, 211-217, 241-278, 316-318, 339, 351-353
 agents\elsevier_client.py             60     60     0%   22-137
-agents\evaluator.py                   68      6    91%   111-116, 263-265
-agents\hitl.py                       133    133     0%   36-254
+agents\evaluator.py                   88     10    89%   128-133, 284-286, 321, 324-326
+agents\hitl.py                       135    135     0%   36-257
 agents\inspector.py                  105     11    90%   151-155, 197-198, 254, 259-260, 269-273, 312
-agents\retriever.py                  211    136    36%   107-108, 138-179, 190-198, 205-212, 226-228, 235-242, 262-303, 314-350, 361-397, 473-505
-agents\synthesiser.py                 47     47     0%   39-193
-api.py                               376    166    56%   45-47, 157, 174-176, 197-200, 203-204, 236, 247-265, 268-277, 281-287, 294-304, 312-314, 317-325, 330-382, 388-395, 443, 445, 493, 506-583, 593-611, 617-635, 641-650
+agents\retriever.py                  223    146    35%   107-108, 138-183, 194-202, 209-216, 230-232, 239-246, 266-307, 318-354, 365-417, 478-479, 498-530
+agents\synthesiser.py                 51     51     0%   39-218
+api.py                               391    178    54%   41-43, 160, 177-179, 200-203, 206-207, 240, 251-269, 276-286, 290-296, 304-315, 323-325, 328-336, 344-414, 420-427, 475, 477, 525, 538-615, 625-643, 649-667, 673-682
 core\__init__.py                       0      0   100%
-core\config.py                        20      0   100%
+core\config.py                        21      0   100%
 core\groq_client.py                   41     41     0%   13-85
-core\orchestrator.py                 368    368     0%   31-805
-core\state.py                         85      0   100%
+core\orchestrator.py                 431    431     0%   32-952
+core\state.py                         91      0   100%
 data\__init__.py                       0      0   100%
 main.py                               32     32     0%   13-80
-storage\persistence.py               107     21    80%   116-121, 143, 193-251, 289
+storage\persistence.py               107     21    80%   116-121, 143, 194-253, 291
 tests\__init__.py                      0      0   100%
 tests\conftest.py                     42     13    69%   39-51, 96-97, 154-155
 tests\test_api.py                    172      0   100%
@@ -134,9 +45,10 @@ tests\test_evaluator.py               88      0   100%
 tests\test_golden_fixture.py          59      0   100%
 tests\test_inspector.py              102      0   100%
 tests\test_persistence.py            130      0   100%
-tests\test_retriever.py               94      0   100%
+tests\test_retriever.py              103      0   100%
 tests\test_state.py                  101      0   100%
 ----------------------------------------------------------------
-TOTAL                               2855   1059    63%
+TOTAL                               3040   1181    61%
 
-================= 128 passed, 29 warnings in 90.40s (0:01:30) =================
+
+================= 129 passed, 30 warnings in 65.08s (0:01:05) =================

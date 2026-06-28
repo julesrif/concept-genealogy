@@ -1,9 +1,9 @@
-﻿============================= test session starts =============================
-platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\.venv\Scripts\python.exe
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.6.0 -- C:\Users\Julio\Nextcloud\Essex\Modules\4 - Intelligent Agents\Tarea 2 - individual project presentation\concept-genealogy\backend\.venv\Scripts\python.exe
 cachedir: .pytest_cache
-rootdir: C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend
-plugins: anyio-4.13.0, langsmith-0.8.15, cov-5.0.0
-collecting ... collected 128 items
+rootdir: C:\Users\Julio\Nextcloud\Essex\Modules\4 - Intelligent Agents\Tarea 2 - individual project presentation\concept-genealogy\backend
+plugins: anyio-4.14.1, langsmith-0.9.3, cov-5.0.0
+collecting ... collected 129 items
 
 tests/test_api.py::TestStartRun::test_start_with_concept PASSED          [  0%]
 tests/test_api.py::TestStartRun::test_start_with_doi PASSED              [  1%]
@@ -13,7 +13,7 @@ tests/test_api.py::TestListRuns::test_empty_list PASSED                  [  3%]
 tests/test_api.py::TestListRuns::test_lists_created_runs PASSED          [  4%]
 tests/test_api.py::TestGetRun::test_existing_run PASSED                  [  5%]
 tests/test_api.py::TestGetRun::test_missing_run_404 PASSED               [  6%]
-tests/test_api.py::TestGateResponse::test_respond_while_awaiting PASSED  [  7%]
+tests/test_api.py::TestGateResponse::test_respond_while_awaiting PASSED  [  6%]
 tests/test_api.py::TestGateResponse::test_respond_when_not_awaiting_fails PASSED [  7%]
 tests/test_api.py::TestGateResponse::test_respond_to_missing_run_404 PASSED [  8%]
 tests/test_api.py::TestRunLogs::test_logs_initially_empty PASSED         [  9%]
@@ -22,7 +22,7 @@ tests/test_api.py::TestRunLogs::test_since_parameter PASSED              [ 10%]
 tests/test_api.py::TestRunStore::test_create_and_get PASSED              [ 11%]
 tests/test_api.py::TestRunStore::test_set_completed PASSED               [ 12%]
 tests/test_api.py::TestRunStore::test_set_failed PASSED                  [ 13%]
-tests/test_api.py::TestRunStore::test_gate_synchronisation PASSED        [ 14%]
+tests/test_api.py::TestRunStore::test_gate_synchronisation PASSED        [ 13%]
 tests/test_api.py::TestRunStore::test_max_logs_limit PASSED              [ 14%]
 tests/test_api.py::TestWebHITLGate::test_gate_1_approve PASSED           [ 15%]
 tests/test_api.py::TestWebHITLGate::test_gate_1_reject PASSED            [ 16%]
@@ -31,81 +31,82 @@ tests/test_challenger.py::TestChallengerInit::test_init_without_groq PASSED [ 17
 tests/test_challenger.py::TestChallengerInit::test_default_model PASSED  [ 18%]
 tests/test_challenger.py::TestChallengerRun::test_no_synthesis_returns_message PASSED [ 19%]
 tests/test_challenger.py::TestChallengerRun::test_empty_synthesis_returns_message PASSED [ 20%]
-tests/test_challenger.py::TestChallengerRun::test_produces_critique_with_issues PASSED [ 21%]
+tests/test_challenger.py::TestChallengerRun::test_produces_critique_with_issues PASSED [ 20%]
 tests/test_challenger.py::TestChallengerRun::test_includes_coverage_summary PASSED [ 21%]
 tests/test_challenger.py::TestChallengerRun::test_early_termination_on_strong_assessment PASSED [ 22%]
 tests/test_challenger.py::TestChallengerFallback::test_fallback_without_groq PASSED [ 23%]
 tests/test_challenger.py::TestChallengerFallback::test_fallback_reports_high_drift_claims PASSED [ 24%]
-tests/test_challenger.py::TestChallengerLLMFailure::test_llm_exception_returns_empty_issues PASSED [ 25%]
+tests/test_challenger.py::TestChallengerLLMFailure::test_llm_exception_returns_empty_issues PASSED [ 24%]
 tests/test_challenger.py::TestEvidenceSummary::test_builds_summary_with_paper_info PASSED [ 25%]
 tests/test_challenger.py::TestEvidenceSummary::test_includes_drift_scores PASSED [ 26%]
 tests/test_challenger.py::TestEvidenceSummary::test_truncates_long_claim_text PASSED [ 27%]
-tests/test_citation_extractor.py::TestToTypedClaims::test_converts_raw_dicts_to_claims PASSED [ 28%]
+tests/test_citation_extractor.py::TestToTypedClaims::test_converts_raw_dicts_to_claims PASSED [ 27%]
 tests/test_citation_extractor.py::TestToTypedClaims::test_confidence_uses_raw_value PASSED [ 28%]
 tests/test_citation_extractor.py::TestToTypedClaims::test_missing_confidence_uses_parameter PASSED [ 29%]
 tests/test_citation_extractor.py::TestToTypedClaims::test_empty_raw_returns_empty PASSED [ 30%]
 tests/test_citation_extractor.py::TestExtractionFallback::test_pdf_is_first_choice PASSED [ 31%]
-tests/test_citation_extractor.py::TestExtractionFallback::test_falls_back_to_abstract_on_pdf_failure PASSED [ 32%]
+tests/test_citation_extractor.py::TestExtractionFallback::test_falls_back_to_abstract_on_pdf_failure PASSED [ 31%]
 tests/test_citation_extractor.py::TestExtractionFallback::test_abstract_only_paper PASSED [ 32%]
 tests/test_citation_extractor.py::TestLLMExtraction::test_valid_json_response PASSED [ 33%]
 tests/test_citation_extractor.py::TestLLMExtraction::test_empty_text_returns_empty PASSED [ 34%]
-tests/test_citation_extractor.py::TestExtractFromPDF::test_successful_pdf_download PASSED [ 35%]
+tests/test_citation_extractor.py::TestExtractFromPDF::test_successful_pdf_download PASSED [ 34%]
 tests/test_citation_extractor.py::TestExtractFromPDF::test_failed_pdf_download PASSED [ 35%]
 tests/test_evaluator.py::TestRelevanceThreshold::test_threshold_constant_is_reasonable PASSED [ 36%]
 tests/test_evaluator.py::TestEvaluatorRun::test_returns_evaluated_claims PASSED [ 37%]
-tests/test_evaluator.py::TestEvaluatorRun::test_graceful_without_groq PASSED [ 38%]
-tests/test_evaluator.py::TestEvaluatorRun::test_empty_claims_returns_empty PASSED [ 39%]
+tests/test_evaluator.py::TestEvaluatorRun::test_graceful_without_groq PASSED [ 37%]
+tests/test_evaluator.py::TestEvaluatorRun::test_empty_claims_returns_empty PASSED [ 38%]
 tests/test_evaluator.py::TestDriftScore::test_drift_score_computed_at_depth_1 PASSED [ 39%]
 tests/test_evaluator.py::TestDriftScore::test_no_drift_without_embedding_model PASSED [ 40%]
 tests/test_evaluator.py::TestEvaluateClaim::test_relevant_claim_returns_evaluated PASSED [ 41%]
-tests/test_evaluator.py::TestEvaluateClaim::test_irrelevant_claim_returns_none PASSED [ 42%]
+tests/test_evaluator.py::TestEvaluateClaim::test_irrelevant_claim_returns_none PASSED [ 41%]
 tests/test_evaluator.py::TestEvaluateClaim::test_unparseable_llm_response_returns_none PASSED [ 42%]
 tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_inspector_parses_golden_claims PASSED [ 43%]
 tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_golden_claims_become_extracted_claims PASSED [ 44%]
-tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_evaluator_scores_golden_claims PASSED [ 45%]
-tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_full_golden_pipeline_produces_tracing_result PASSED [ 46%]
+tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_evaluator_scores_golden_claims PASSED [ 44%]
+tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_full_golden_pipeline_produces_tracing_result PASSED [ 45%]
 tests/test_golden_fixture.py::TestGoldenFixturePipeline::test_golden_claims_have_inline_citations PASSED [ 46%]
 tests/test_inspector.py::TestValidateCandidates::test_accepts_valid_candidate_papers PASSED [ 47%]
 tests/test_inspector.py::TestValidateCandidates::test_accepts_valid_dict PASSED [ 48%]
-tests/test_inspector.py::TestValidateCandidates::test_discards_malformed_entries PASSED [ 49%]
-tests/test_inspector.py::TestValidateCandidates::test_empty_list_returns_empty PASSED [ 50%]
+tests/test_inspector.py::TestValidateCandidates::test_discards_malformed_entries PASSED [ 48%]
+tests/test_inspector.py::TestValidateCandidates::test_empty_list_returns_empty PASSED [ 49%]
 tests/test_inspector.py::TestValidateTracingResult::test_assembles_tracing_result PASSED [ 50%]
 tests/test_inspector.py::TestValidateTracingResult::test_corrects_depth_mismatch PASSED [ 51%]
-tests/test_inspector.py::TestValidateTracingResult::test_empty_claims_returns_valid_result PASSED [ 52%]
-tests/test_inspector.py::TestValidateSynthesis::test_valid_text_passes_through PASSED [ 53%]
+tests/test_inspector.py::TestValidateTracingResult::test_empty_claims_returns_valid_result PASSED [ 51%]
+tests/test_inspector.py::TestValidateSynthesis::test_valid_text_passes_through PASSED [ 52%]
 tests/test_inspector.py::TestValidateSynthesis::test_empty_string_returns_failure_message PASSED [ 53%]
 tests/test_inspector.py::TestValidateSynthesis::test_json_error_response_detected PASSED [ 54%]
 tests/test_inspector.py::TestValidateSynthesis::test_non_string_converted PASSED [ 55%]
-tests/test_inspector.py::TestValidateExtractedClaimsJson::test_valid_json_array PASSED [ 56%]
-tests/test_inspector.py::TestValidateExtractedClaimsJson::test_code_fenced_json PASSED [ 57%]
+tests/test_inspector.py::TestValidateExtractedClaimsJson::test_valid_json_array PASSED [ 55%]
+tests/test_inspector.py::TestValidateExtractedClaimsJson::test_code_fenced_json PASSED [ 56%]
 tests/test_inspector.py::TestValidateExtractedClaimsJson::test_single_object_wrapped PASSED [ 57%]
 tests/test_inspector.py::TestValidateExtractedClaimsJson::test_ndjson_recovery PASSED [ 58%]
-tests/test_inspector.py::TestValidateExtractedClaimsJson::test_invalid_json_returns_empty PASSED [ 59%]
-tests/test_inspector.py::TestValidateExtractedClaimsJson::test_golden_fixture_parses PASSED [ 60%]
+tests/test_inspector.py::TestValidateExtractedClaimsJson::test_invalid_json_returns_empty PASSED [ 58%]
+tests/test_inspector.py::TestValidateExtractedClaimsJson::test_golden_fixture_parses PASSED [ 59%]
 tests/test_inspector.py::TestCleanJsonString::test_strips_code_fences PASSED [ 60%]
 tests/test_inspector.py::TestCleanJsonString::test_strips_plain_fences PASSED [ 61%]
 tests/test_inspector.py::TestCleanJsonString::test_no_change_for_clean_json PASSED [ 62%]
-tests/test_persistence.py::TestPersistenceInit::test_creates_output_directory PASSED [ 63%]
-tests/test_persistence.py::TestPersistenceInit::test_loads_embedding_model PASSED [ 64%]
+tests/test_persistence.py::TestPersistenceInit::test_creates_output_directory PASSED [ 62%]
+tests/test_persistence.py::TestPersistenceInit::test_loads_embedding_model PASSED [ 63%]
 tests/test_persistence.py::TestPersistenceInit::test_graceful_without_sentence_transformers PASSED [ 64%]
 tests/test_persistence.py::TestJsonOutput::test_writes_json_log PASSED   [ 65%]
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique PASSED [ 66%]
-tests/test_persistence.py::TestMarkdownOutput::test_writes_markdown_file PASSED [ 67%]
+tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique PASSED [ 65%]
+tests/test_persistence.py::TestMarkdownOutput::test_writes_markdown_file PASSED [ 66%]
 tests/test_persistence.py::TestMarkdownOutput::test_markdown_includes_synthesis PASSED [ 67%]
 tests/test_persistence.py::TestMarkdownOutput::test_markdown_includes_challenger_review PASSED [ 68%]
-tests/test_persistence.py::TestPopulateEmbeddings::test_skips_when_no_embedding_model PASSED [ 69%]
-tests/test_persistence.py::TestPopulateEmbeddings::test_skips_when_column_missing PASSED [ 70%]
-tests/test_persistence.py::TestPopulateEmbeddings::test_populates_embeddings_for_claims PASSED [ 71%]
+tests/test_persistence.py::TestPopulateEmbeddings::test_skips_when_no_embedding_model PASSED [ 68%]
+tests/test_persistence.py::TestPopulateEmbeddings::test_skips_when_column_missing PASSED [ 69%]
+tests/test_persistence.py::TestPopulateEmbeddings::test_populates_embeddings_for_claims PASSED [ 70%]
 tests/test_persistence.py::TestPopulateEmbeddings::test_embedding_vector_format PASSED [ 71%]
 tests/test_persistence.py::TestPopulateEmbeddings::test_exception_is_non_fatal PASSED [ 72%]
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown PASSED [ 73%]
-tests/test_persistence.py::TestSaveIntegration::test_generate_run_id_deterministic_format PASSED [ 74%]
-tests/test_retriever.py::TestRetrieverInit::test_loads_sjr_index PASSED  [ 75%]
+tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown PASSED [ 72%]
+tests/test_persistence.py::TestSaveIntegration::test_generate_run_id_deterministic_format PASSED [ 73%]
+tests/test_retriever.py::TestRetrieverInit::test_loads_sjr_index PASSED  [ 74%]
 tests/test_retriever.py::TestRetrieverInit::test_missing_sjr_csv_graceful PASSED [ 75%]
-tests/test_retriever.py::TestRetrieverInit::test_max_candidates_from_config PASSED [ 76%]
-tests/test_retriever.py::TestParsePaper::test_parses_full_response PASSED [ 77%]
-tests/test_retriever.py::TestParsePaper::test_handles_missing_optional_fields PASSED [ 78%]
+tests/test_retriever.py::TestRetrieverInit::test_max_candidates_from_config PASSED [ 75%]
+tests/test_retriever.py::TestParsePaper::test_parses_full_response PASSED [ 76%]
+tests/test_retriever.py::TestParsePaper::test_handles_missing_optional_fields PASSED [ 77%]
 tests/test_retriever.py::TestParsePaper::test_handles_null_open_access_pdf PASSED [ 78%]
+tests/test_retriever.py::TestParsePaper::test_attaches_sjr_score_from_venue PASSED [ 79%]
 tests/test_retriever.py::TestSJRRanking::test_sjr_beats_citation_count PASSED [ 79%]
 tests/test_retriever.py::TestSJRRanking::test_citation_count_fallback PASSED [ 80%]
 tests/test_retriever.py::TestRetrieverRun::test_returns_candidates PASSED [ 81%]
@@ -114,7 +115,7 @@ tests/test_retriever.py::TestRetrieverRun::test_max_candidates_limit PASSED [ 82
 tests/test_retriever.py::TestDOIValidation::test_valid_doi_returns_true PASSED [ 83%]
 tests/test_retriever.py::TestDOIValidation::test_invalid_doi_returns_false PASSED [ 84%]
 tests/test_state.py::TestPipelineStage::test_all_expected_stages_exist PASSED [ 85%]
-tests/test_state.py::TestPipelineStage::test_stage_is_string_enum PASSED [ 85%]
+tests/test_state.py::TestPipelineStage::test_stage_is_string_enum PASSED [ 86%]
 tests/test_state.py::TestPipelineState::test_default_initialisation PASSED [ 86%]
 tests/test_state.py::TestPipelineState::test_doi_mode_fields PASSED      [ 87%]
 tests/test_state.py::TestPipelineState::test_retry_constraints PASSED    [ 88%]
@@ -123,7 +124,7 @@ tests/test_state.py::TestPipelineState::test_visited_paper_ids_is_set PASSED [ 8
 tests/test_state.py::TestPipelineState::test_concept_at_depth_dict PASSED [ 90%]
 tests/test_state.py::TestCandidatePaper::test_minimal_valid_paper PASSED [ 91%]
 tests/test_state.py::TestCandidatePaper::test_full_paper PASSED          [ 92%]
-tests/test_state.py::TestCandidatePaper::test_missing_required_field_raises PASSED [ 92%]
+tests/test_state.py::TestCandidatePaper::test_missing_required_field_raises PASSED [ 93%]
 tests/test_state.py::TestExtractedClaim::test_valid_claim PASSED         [ 93%]
 tests/test_state.py::TestExtractedClaim::test_confidence_bounds PASSED   [ 94%]
 tests/test_state.py::TestExtractedClaim::test_default_confidence PASSED  [ 95%]
@@ -134,92 +135,4 @@ tests/test_state.py::TestEvaluatedClaim::test_drift_score_at_depth_1 PASSED [ 98
 tests/test_state.py::TestTracingResult::test_valid_tracing_result PASSED [ 99%]
 tests/test_state.py::TestTracingResult::test_empty_claims_allowed PASSED [100%]
 
-============================== warnings summary ===============================
-.venv\Lib\site-packages\fastapi\testclient.py:1
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
-    from starlette.testclient import TestClient as TestClient  # noqa
-
-core\config.py:36
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:36: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_api_key: str = Field(..., env="GROQ_API_KEY")
-
-core\config.py:41
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:41: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_model_fast: str = Field(
-
-core\config.py:47
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:47: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    groq_model_reasoning: str = Field(
-
-core\config.py:55
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:55: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    semantic_scholar_api_key: str = Field(default="", env="SEMANTIC_SCHOLAR_API_KEY")
-
-core\config.py:62
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:62: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    elsevier_api_key: str = Field(default="", env="ELSEVIER_API_KEY")
-
-core\config.py:65
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:65: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    max_depth: int = Field(default=3, env="MAX_DEPTH")
-
-core\config.py:66
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:66: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
-
-core\config.py:72
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:72: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    sjr_csv_path: str = Field(
-
-core\config.py:78
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:78: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    database_url: str = Field(
-
-core\config.py:82
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:82: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    output_dir: str = Field(default="output", env="OUTPUT_DIR")
-
-core\config.py:85
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:85: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    log_level: str = Field(default="INFO", env="LOG_LEVEL")
-
-core\config.py:21
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\config.py:21: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    class Config(BaseSettings):
-
-core\state.py:114
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\core\state.py:114: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    class PipelineState(BaseModel):
-
-tests/test_api.py::TestStartRun::test_start_with_concept
-tests/test_api.py::TestStartRun::test_start_with_doi
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:441: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    config_dict = config.dict()
-
-tests/test_api.py::TestGateResponse::test_respond_while_awaiting
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:484: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    run_store.respond_to_gate(run_id, response.dict())
-
-tests/test_api.py::TestWebHITLGate::test_gate_1_approve
-tests/test_api.py::TestWebHITLGate::test_gate_1_approve
-tests/test_api.py::TestWebHITLGate::test_gate_1_reject
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\api.py:230: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    candidates=[c.dict() for c in candidates],
-
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\storage\persistence.py:165: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    "seed_paper": state.selected_seed.dict() if state.selected_seed else None,
-
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_writes_json_log
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestJsonOutput::test_json_includes_challenger_critique
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-tests/test_persistence.py::TestSaveIntegration::test_save_writes_json_and_markdown
-  C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend\storage\persistence.py:171: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
-    "claims": [c.dict() for c in r.claims],
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-================ 128 passed, 29 warnings in 129.05s (0:02:09) =================
+================= 129 passed, 30 warnings in 60.16s (0:01:00) =================
