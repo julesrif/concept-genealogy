@@ -21,7 +21,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PipelineStage(str, Enum):
@@ -203,7 +203,4 @@ class PipelineState(BaseModel):
     # Output
     output_path: Optional[str] = None  # path to final JSON/Markdown deliverable
 
-    class Config:
-        # Allow set type in visited_paper_ids - Pydantic v2 handles this natively,
-        # but explicit config keeps compatibility with Pydantic v1 shims.
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

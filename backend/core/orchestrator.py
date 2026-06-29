@@ -335,7 +335,7 @@ class Orchestrator:
         def wrapped(state: dict) -> dict:
             typed_state = PipelineState(**state)
             result = fn(typed_state)
-            return result.dict()
+            return result.model_dump()
         return wrapped
 
     # Node implementations
@@ -946,7 +946,7 @@ class Orchestrator:
         # Formula: seed(1) + depth*papers_per_level + gates(4) + synth+challenge+persist(3) + margin
         max_iterations = 20 + (initial_state.max_depth * initial_state.papers_per_level * 4)
         final_state_dict = self.graph.invoke(
-            initial_state.dict(),
+            initial_state.model_dump(),
             config={"recursion_limit": max_iterations},
         )
         return PipelineState(**final_state_dict)

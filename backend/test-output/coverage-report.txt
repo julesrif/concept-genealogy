@@ -1,54 +1,71 @@
-============================= test session starts =============================
+﻿============================= test session starts =============================
 platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.6.0
-rootdir: C:\Users\Julio\Nextcloud\Essex\Modules\4 - Intelligent Agents\Tarea 2 - individual project presentation\concept-genealogy\backend
-plugins: anyio-4.14.1, langsmith-0.9.3, cov-5.0.0
-collected 129 items
+rootdir: C:\Users\EspinoJu\Documents\GIT\concept-genealogy\backend
+configfile: pytest.ini
+plugins: anyio-4.13.0, langsmith-0.8.15, cov-5.0.0
+collected 237 items
 
-tests\test_api.py .....................                                  [ 16%]
-tests\test_challenger.py ..............                                  [ 27%]
-tests\test_citation_extractor.py ...........                             [ 35%]
-tests\test_evaluator.py .........                                        [ 42%]
-tests\test_golden_fixture.py .....                                       [ 46%]
-tests\test_inspector.py ....................                             [ 62%]
-tests\test_persistence.py ...............                                [ 73%]
-tests\test_retriever.py ..............                                   [ 84%]
-tests\test_state.py ....................                                 [100%]
+tests\functional\test_api.py .....................                       [  8%]
+tests\functional\test_golden_fixture.py .....                            [ 10%]
+tests\functional\test_orchestrator_e2e.py .                              [ 11%]
+tests\unit\test_challenger.py ..............                             [ 17%]
+tests\unit\test_citation_extractor.py ...........                        [ 21%]
+tests\unit\test_elsevier_client.py ..............                        [ 27%]
+tests\unit\test_evaluator.py .........                                   [ 31%]
+tests\unit\test_groq_client.py ..........                                [ 35%]
+tests\unit\test_hitl.py ...............................                  [ 48%]
+tests\unit\test_inspector.py ....................                        [ 57%]
+tests\unit\test_main.py ....                                             [ 59%]
+tests\unit\test_orchestrator.py ..................................       [ 73%]
+tests\unit\test_persistence.py ...............                           [ 79%]
+tests\unit\test_retriever.py ..............                              [ 85%]
+tests\unit\test_state.py ....................                            [ 94%]
+tests\unit\test_synthesiser.py ..............                            [100%]
 
 ---------- coverage: platform win32, python 3.12.10-final-0 ----------
-Name                               Stmts   Miss  Cover   Missing
-----------------------------------------------------------------
-__init__.py                            0      0   100%
-agents\__init__.py                     0      0   100%
-agents\challenger.py                 106      2    98%   189, 262
-agents\citation_extractor.py         138     50    64%   93-95, 122-127, 148-149, 189, 197-203, 211-217, 241-278, 316-318, 339, 351-353
-agents\elsevier_client.py             60     60     0%   22-137
-agents\evaluator.py                   88     10    89%   128-133, 284-286, 321, 324-326
-agents\hitl.py                       135    135     0%   36-257
-agents\inspector.py                  105     11    90%   151-155, 197-198, 254, 259-260, 269-273, 312
-agents\retriever.py                  223    146    35%   107-108, 138-183, 194-202, 209-216, 230-232, 239-246, 266-307, 318-354, 365-417, 478-479, 498-530
-agents\synthesiser.py                 51     51     0%   39-218
-api.py                               391    178    54%   41-43, 160, 177-179, 200-203, 206-207, 240, 251-269, 276-286, 290-296, 304-315, 323-325, 328-336, 344-414, 420-427, 475, 477, 525, 538-615, 625-643, 649-667, 673-682
-core\__init__.py                       0      0   100%
-core\config.py                        21      0   100%
-core\groq_client.py                   41     41     0%   13-85
-core\orchestrator.py                 431    431     0%   32-952
-core\state.py                         91      0   100%
-data\__init__.py                       0      0   100%
-main.py                               32     32     0%   13-80
-storage\persistence.py               107     21    80%   116-121, 143, 194-253, 291
-tests\__init__.py                      0      0   100%
-tests\conftest.py                     42     13    69%   39-51, 96-97, 154-155
-tests\test_api.py                    172      0   100%
-tests\test_challenger.py             105      0   100%
-tests\test_citation_extractor.py     118      0   100%
-tests\test_evaluator.py               88      0   100%
-tests\test_golden_fixture.py          59      0   100%
-tests\test_inspector.py              102      0   100%
-tests\test_persistence.py            130      0   100%
-tests\test_retriever.py              103      0   100%
-tests\test_state.py                  101      0   100%
-----------------------------------------------------------------
-TOTAL                               3040   1181    61%
+Name                                        Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------------
+__init__.py                                     0      0   100%
+agents\__init__.py                              0      0   100%
+agents\challenger.py                          106      2    98%   189, 262
+agents\citation_extractor.py                  138     47    66%   122-127, 148-149, 189, 197-203, 211-217, 241-278, 316-318, 339, 351-353
+agents\elsevier_client.py                      60      5    92%   133-137
+agents\evaluator.py                            88     10    89%   128-133, 284-286, 321, 324-326
+agents\hitl.py                                135      2    99%   69, 203
+agents\inspector.py                           105     11    90%   151-155, 197-198, 254, 259-260, 269-273, 312
+agents\retriever.py                           223    146    35%   107-108, 138-183, 194-202, 209-216, 230-232, 239-246, 266-307, 318-354, 365-417, 478-479, 498-530
+agents\synthesiser.py                          51      0   100%
+api.py                                        391    178    54%   45-47, 160, 177-179, 200-203, 206-207, 240, 251-269, 276-286, 290-296, 304-315, 323-325, 328-336, 344-414, 420-427, 475, 477, 525, 538-615, 625-643, 649-667, 673-682
+core\__init__.py                                0      0   100%
+core\config.py                                 19      0   100%
+core\groq_client.py                            41      0   100%
+core\orchestrator.py                          431    119    72%   72, 367-373, 383-418, 422-461, 465-478, 500-520, 566-569, 598-600, 642, 648, 701, 717-722, 763, 795-796, 818, 854-903, 913, 920-921, 929-931
+core\state.py                                  90      0   100%
+data\__init__.py                                0      0   100%
+main.py                                        32      1    97%   80
+storage\persistence.py                        107     21    80%   116-121, 143, 194-253, 291
+tests\__init__.py                               0      0   100%
+tests\conftest.py                              42      4    90%   96-97, 154-155
+tests\functional\__init__.py                    0      0   100%
+tests\functional\test_api.py                  172      0   100%
+tests\functional\test_golden_fixture.py        59      0   100%
+tests\functional\test_orchestrator_e2e.py      57      0   100%
+tests\unit\__init__.py                          0      0   100%
+tests\unit\test_challenger.py                 105      0   100%
+tests\unit\test_citation_extractor.py         118      0   100%
+tests\unit\test_elsevier_client.py            107      9    92%   24-32
+tests\unit\test_evaluator.py                   88      0   100%
+tests\unit\test_groq_client.py                 97      0   100%
+tests\unit\test_hitl.py                       153      0   100%
+tests\unit\test_inspector.py                  102      0   100%
+tests\unit\test_main.py                        51      0   100%
+tests\unit\test_orchestrator.py               235      0   100%
+tests\unit\test_persistence.py                130      0   100%
+tests\unit\test_retriever.py                  103      0   100%
+tests\unit\test_state.py                      101      0   100%
+tests\unit\test_synthesiser.py                 89      0   100%
+-------------------------------------------------------------------------
+TOTAL                                        3826    555    85%
 
 
-================= 129 passed, 30 warnings in 65.08s (0:01:05) =================
+======================= 237 passed in 258.90s (0:04:18) =======================

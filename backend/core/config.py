@@ -15,7 +15,7 @@ Pydantic BaseSettings reads from environment variables automatically, giving us:
 """
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Config(BaseSettings):
@@ -32,67 +32,53 @@ class Config(BaseSettings):
     Source: https://console.groq.com/docs/rate-limits
     """
 
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # ── Groq LLM ──────────────────────────────────────────────────────────────
-    groq_api_key: str = Field(..., env="GROQ_API_KEY")
+    groq_api_key: str
 
     # Lightweight model for extraction/evaluation (stateless worker nodes)
     # WHY 8b FOR STATELESS WORKER NODES: keeps token expenditure proportional -
     # extraction and validation do not require comparative reasoning.
-    groq_model_fast: str = Field(
-        default="llama-3.1-8b-instant",
-        env="GROQ_MODEL_FAST"
-    )
+    groq_model_fast: str = "llama-3.1-8b-instant"
 
     # Larger model for synthesis (deliberative, comparative reasoning required)
-    groq_model_reasoning: str = Field(
-        default="llama-3.3-70b-versatile",
-        env="GROQ_MODEL_REASONING"
-    )
+    groq_model_reasoning: str = "llama-3.3-70b-versatile"
 
     # ── Semantic Scholar API ───────────────────────────────────────────────────
     # Free tier does not require an API key, but providing one raises rate limits.
     # Source: https://www.semanticscholar.org/product/api
-    semantic_scholar_api_key: str = Field(default="", env="SEMANTIC_SCHOLAR_API_KEY")
+    semantic_scholar_api_key: str = ""
     semantic_scholar_base_url: str = "https://api.semanticscholar.org/graph/v1"
 
     # ── Elsevier API (ScienceDirect / Scopus) ──────────────────────────────────
     # Institutional API key for full-text retrieval of non-OA papers.
     # Allows data mining under academic license (no storage of PDFs).
     # Source: https://dev.elsevier.com/
-    elsevier_api_key: str = Field(default="", env="ELSEVIER_API_KEY")
+    elsevier_api_key: str = ""
 
     # ── Pipeline constraints ───────────────────────────────────────────────────
-    max_depth: int = Field(default=3, env="MAX_DEPTH")
-    max_candidates: int = Field(default=3, env="MAX_CANDIDATES")
+    max_depth: int = 3
+    max_candidates: int = 3
 
     # Confidence assigned to claims extracted from abstracts rather than full text.
     # Default 0.5 reflects that abstracts contain summarised findings without the
     # supporting detail present in full papers. Configurable via env to allow
     # domain-specific tuning (e.g., raise for fields with information-dense abstracts).
-    abstract_confidence: float = Field(default=0.5, env="ABSTRACT_CONFIDENCE")
+    abstract_confidence: float = 0.5
 
     # ── SJR ranking ───────────────────────────────────────────────────────────
     # Path to local SJR CSV dataset (SCImago Journal & Country Rank, n.d.)
     # Downloaded from: https://www.scimagojr.com/journalrank.php
     # Kept local to avoid runtime HTTP dependency for ranking (design proposal 7)
-    sjr_csv_path: str = Field(
-        default="data/scimagojr2025.csv",
-        env="SJR_CSV_PATH"
-    )
+    sjr_csv_path: str = "data/scimagojr2025.csv"
 
     # ── Storage ────────────────────────────────────────────────────────────────
-    database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/concept_genealogy",
-        env="DATABASE_URL"
-    )
-    output_dir: str = Field(default="output", env="OUTPUT_DIR")
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/concept_genealogy"
+    output_dir: str = "output"
 
     # ── Logging ────────────────────────────────────────────────────────────────
-    log_level: str = Field(default="INFO", env="LOG_LEVEL")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    log_level: str = "INFO"
 
 
 def load_config() -> Config:

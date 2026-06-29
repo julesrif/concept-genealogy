@@ -230,7 +230,7 @@ class WebHITLGate:
     ) -> tuple[bool, Optional[CandidatePaper]]:
         gate = GateRequest(
             gate_type=GateType.SEED_SELECTION,
-            candidates=[c.dict() for c in candidates],
+            candidates=[c.model_dump() for c in candidates],
             message=message,
         )
         self.store.set_gate(self.run_id, gate)
@@ -354,8 +354,8 @@ def run_pipeline_thread(run_id: str, concept: str, doi: str | None, config_dict:
 
         def on_tracing_complete(tracing_results, seed_paper, concept_at_depth=None):
             """Called by orchestrator when tracing is done, before synthesis."""
-            results_dicts = [r.dict() for r in tracing_results]
-            seed_dict = seed_paper.dict() if seed_paper else None
+            results_dicts = [r.model_dump() for r in tracing_results]
+            seed_dict = seed_paper.model_dump() if seed_paper else None
             run_store.set_tracing_results(run_id, results_dicts, seed_dict, concept_at_depth)
 
         config_dict["_tracing_complete_callback"] = on_tracing_complete
@@ -470,7 +470,7 @@ async def start_run(req: StartRunRequest):
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
 
     config = load_config()
-    config_dict = config.dict()
+    config_dict = config.model_dump()
     if req.depth is not None:
         config_dict["max_depth"] = req.depth
     if req.papers_per_level is not None:
@@ -513,7 +513,7 @@ async def respond_to_gate(run_id: str, response: GateResponse):
     if info.status != RunStatus.AWAITING_INPUT:
         raise HTTPException(status_code=400, detail="Run is not awaiting input")
 
-    run_store.respond_to_gate(run_id, response.dict())
+    run_store.respond_to_gate(run_id, response.model_dump())
     return {"status": "ok"}
 
 

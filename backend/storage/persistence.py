@@ -162,13 +162,13 @@ class PersistenceLayer:
         log_data = {
             "run_id": run_id,
             "user_concept": state.user_concept,
-            "seed_paper": state.selected_seed.dict() if state.selected_seed else None,
+            "seed_paper": state.selected_seed.model_dump() if state.selected_seed else None,
             "tracing_results": [
                 {
                     "paper_id": r.paper_id,
                     "paper_title": r.paper_title,
                     "depth": r.depth,
-                    "claims": [c.dict() for c in r.claims],
+                    "claims": [c.model_dump() for c in r.claims],
                 }
                 for r in state.tracing_results
             ],
