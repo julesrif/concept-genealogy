@@ -5,6 +5,7 @@ Tests graph construction, routing logic, node sequencing, retry caps,
 and error handling. All agents are mocked at instance level.
 """
 
+import json
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
@@ -545,3 +546,460 @@ class TestOrchestratorRun:
         call_args = orchestrator.graph.invoke.call_args[0][0]
         assert call_args["doi_mode"] is True
         assert call_args["input_doi"] == "10.1234/test"
+
+
+# ── Extract concepts (DOI mode) ────────────────────────────────────────────
+
+class TestNodeExtractConcepts:
+    """Test _node_extract_concepts for DOI-mode concept extraction."""
+
+    def test_no_seed_paper_fails(self, orchestrator):
+        state = PipelineState(doi_mode=True, selected_seed=None)
+        result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.FAILED
+        assert "No seed paper" in result.error_message
+
+    def test_no_text_available_fails(self, orchestrator, seed_paper):
+        seed_paper.open_access_url = None
+        seed_paper.abstract = None
+        orchestrator.extractor._extract_from_pdf = MagicMock(return_value=("", []))
+        orchestrator.extractor.elsevier = None
+
+        state = PipelineState(doi_mode=True, selected_seed=seed_paper)
+        result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.FAILED
+        assert "Could not retrieve paper text" in result.error_message
+
+    def test_extract_concepts_success(self, orchestrator, seed_paper):
+        orchestrator.extractor._extract_from_pdf = MagicMock(return_value=("Full text content", []))
+        orchestrator.extractor.elsevier = None
+
+        with patch.object(
+            orchestrator, "_extract_concepts_from_text",
+            return_value=["attention", "transformer", "self-attention"],
+        ):
+            state = PipelineState(doi_mode=True, selected_seed=seed_paper)
+            result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.AWAITING_CONCEPT_SELECTION
+        assert result.extracted_concepts == ["attention", "transformer", "self-attention"]
+
+    def test_extract_concepts_empty_fails(self, orchestrator, seed_paper):
+        orchestrator.extractor._extract_from_pdf = MagicMock(return_value=("Full text", []))
+        orchestrator.extractor.elsevier = None
+
+        with patch.object(
+            orchestrator, "_extract_concepts_from_text", return_value=[],
+        ):
+            state = PipelineState(doi_mode=True, selected_seed=seed_paper)
+            result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.FAILED
+        assert "Could not extract concepts" in result.error_message
+
+    def test_uses_abstract_as_fallback(self, orchestrator, seed_paper):
+        seed_paper.open_access_url = None
+        seed_paper.abstract = "An abstract about attention."
+        orchestrator.extractor._extract_from_pdf = MagicMock(return_value=("", []))
+        orchestrator.extractor.elsevier = None
+
+        with patch.object(
+            orchestrator, "_extract_concepts_from_text",
+            return_value=["attention"],
+        ) as mock_extract:
+            state = PipelineState(doi_mode=True, selected_seed=seed_paper)
+            result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.AWAITING_CONCEPT_SELECTION
+        # The abstract text should have been passed
+        assert "abstract" in mock_extract.call_args[0][0].lower() or mock_extract.call_args[0][0] == "An abstract about attention."
+
+    def test_uses_elsevier_as_fallback(self, orchestrator, seed_paper):
+        seed_paper.open_access_url = None
+        seed_paper.doi = "10.1234/test"
+        seed_paper.abstract = None
+        orchestrator.extractor._extract_from_pdf = MagicMock(return_value=("", []))
+        orchestrator.extractor.elsevier = MagicMock()
+        orchestrator.extractor.elsevier.get_full_text.return_value = "Elsevier text"
+
+        with patch.object(
+            orchestrator, "_extract_concepts_from_text",
+            return_value=["concept1"],
+        ):
+            state = PipelineState(doi_mode=True, selected_seed=seed_paper)
+            result = orchestrator._node_extract_concepts(state)
+        assert result.stage == PipelineStage.AWAITING_CONCEPT_SELECTION
+
+
+class TestExtractConceptsFromText:
+    """Test _extract_concepts_from_text LLM parsing."""
+
+    def test_returns_empty_without_groq(self, orchestrator):
+        orchestrator.config["_groq_client"] = None
+        result = orchestrator._extract_concepts_from_text("text", "title")
+        assert result == []
+
+    def test_parses_json_array(self, orchestrator):
+        mock_groq = MagicMock()
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message.content = '["attention", "transformer", "self-attention"]'
+        mock_groq.chat_completion.return_value = resp
+        orchestrator.config["_groq_client"] = mock_groq
+
+        result = orchestrator._extract_concepts_from_text("paper text", "Paper Title")
+        assert result == ["attention", "transformer", "self-attention"]
+
+    def test_handles_code_fenced_json(self, orchestrator):
+        mock_groq = MagicMock()
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message.content = '```json\n["attention", "transformer"]\n```'
+        mock_groq.chat_completion.return_value = resp
+        orchestrator.config["_groq_client"] = mock_groq
+
+        result = orchestrator._extract_concepts_from_text("text", "title")
+        assert result == ["attention", "transformer"]
+
+    def test_llm_exception_returns_empty(self, orchestrator):
+        mock_groq = MagicMock()
+        mock_groq.chat_completion.side_effect = RuntimeError("API down")
+        orchestrator.config["_groq_client"] = mock_groq
+
+        result = orchestrator._extract_concepts_from_text("text", "title")
+        assert result == []
+
+    def test_truncates_to_15_concepts(self, orchestrator):
+        mock_groq = MagicMock()
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        concepts = [f"concept_{i}" for i in range(20)]
+        resp.choices[0].message.content = json.dumps(concepts)
+        mock_groq.chat_completion.return_value = resp
+        orchestrator.config["_groq_client"] = mock_groq
+
+        result = orchestrator._extract_concepts_from_text("text", "title")
+        assert len(result) == 15
+
+
+# ── HITL concept selection ──────────────────────────────────────────────────
+
+class TestNodeHitlConceptSelection:
+    """Test _node_hitl_concept_selection."""
+
+    def test_approved_sets_concepts(self, orchestrator):
+        orchestrator.hitl.gate_concept_selection.return_value = ["attn", "transformer"]
+        state = PipelineState(
+            doi_mode=True,
+            extracted_concepts=["attn", "transformer", "encoder"],
+        )
+        result = orchestrator._node_hitl_concept_selection(state)
+        assert result.hitl_gate_1_approved is True
+        assert result.selected_concepts == ["attn", "transformer"]
+        assert result.user_concept == "attn"
+
+    def test_rejected_sets_flag(self, orchestrator):
+        orchestrator.hitl.gate_concept_selection.return_value = None
+        state = PipelineState(
+            doi_mode=True,
+            extracted_concepts=["attn", "transformer"],
+        )
+        result = orchestrator._node_hitl_concept_selection(state)
+        assert result.hitl_gate_1_approved is False
+
+
+# ── Concept abstraction ────────────────────────────────────────────────────
+
+class TestAbstractConceptForDepth:
+    """Test _abstract_concept_for_depth LLM-based concept evolution."""
+
+    def test_no_groq_falls_back_to_user_concept(self, orchestrator):
+        orchestrator.config["_groq_client"] = None
+        state = PipelineState(user_concept="attention mechanism")
+        orchestrator._abstract_concept_for_depth(state, completed_depth=0)
+        assert state.concept_at_depth[1] == "attention mechanism"
+
+    def test_no_claims_carries_forward(self, orchestrator):
+        orchestrator.config["_groq_client"] = MagicMock()
+        state = PipelineState(
+            user_concept="attention mechanism",
+            concept_at_depth={0: "attention mechanism"},
+            tracing_results=[],
+        )
+        orchestrator._abstract_concept_for_depth(state, completed_depth=0)
+        assert state.concept_at_depth[1] == "attention mechanism"
+
+    def test_llm_returns_abstracted_concept(self, orchestrator, tracing_result_depth0):
+        mock_groq = MagicMock()
+        resp = MagicMock()
+        resp.choices = [MagicMock()]
+        resp.choices[0].message.content = "selective attention"
+        mock_groq.chat_completion.return_value = resp
+        orchestrator.config["_groq_client"] = mock_groq
+
+        state = PipelineState(
+            user_concept="attention mechanism",
+            concept_at_depth={0: "attention mechanism"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._abstract_concept_for_depth(state, completed_depth=0)
+        assert state.concept_at_depth[1] == "selective attention"
+
+    def test_llm_exception_carries_forward(self, orchestrator, tracing_result_depth0):
+        mock_groq = MagicMock()
+        mock_groq.chat_completion.side_effect = RuntimeError("API error")
+        orchestrator.config["_groq_client"] = mock_groq
+
+        state = PipelineState(
+            user_concept="attention mechanism",
+            concept_at_depth={0: "attention mechanism"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._abstract_concept_for_depth(state, completed_depth=0)
+        assert state.concept_at_depth[1] == "attention mechanism"
+
+
+# ── BFS queue management ───────────────────────────────────────────────────
+
+class TestPopulateNextDepthQueue:
+    """Test _populate_next_depth_queue."""
+
+    def test_collects_unvisited_refs(self, orchestrator, tracing_result_depth0, seed_paper):
+        tracing_result_depth0.references_explored = ["ref1", "ref2", "ref3"]
+
+        ref_paper = CandidatePaper(
+            paper_id="ref1", title="Ref Paper", authors=["B"], year=2018,
+        )
+        orchestrator.retriever.fetch_paper_by_id.return_value = ref_paper
+        orchestrator.retriever._rank_by_sjr.return_value = [ref_paper]
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            papers_per_level=2,
+            visited_paper_ids={"seed123"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._populate_next_depth_queue(state)
+        assert len(state.pending_papers_at_depth) > 0
+        # seed123 should NOT be in the queue (already visited)
+        assert "seed123" not in state.pending_papers_at_depth
+
+    def test_no_refs_sets_empty_queue(self, orchestrator, tracing_result_depth0):
+        tracing_result_depth0.references_explored = []
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            papers_per_level=2,
+            visited_paper_ids={"seed123"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._populate_next_depth_queue(state)
+        assert state.pending_papers_at_depth == []
+
+    def test_all_refs_visited_sets_empty_queue(self, orchestrator, tracing_result_depth0):
+        tracing_result_depth0.references_explored = ["ref1", "ref2"]
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            papers_per_level=2,
+            visited_paper_ids={"seed123", "ref1", "ref2"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._populate_next_depth_queue(state)
+        assert state.pending_papers_at_depth == []
+
+    def test_caches_fetched_metadata(self, orchestrator, tracing_result_depth0):
+        tracing_result_depth0.references_explored = ["ref1"]
+
+        ref_paper = CandidatePaper(
+            paper_id="ref1", title="Ref", authors=[], year=2018,
+        )
+        orchestrator.retriever.fetch_paper_by_id.return_value = ref_paper
+        orchestrator.retriever._rank_by_sjr.return_value = [ref_paper]
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            papers_per_level=3,
+            visited_paper_ids={"seed123"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._populate_next_depth_queue(state)
+        assert hasattr(state, '_paper_cache')
+        assert "ref1" in state._paper_cache
+
+    def test_unfetchable_refs_fallback(self, orchestrator, tracing_result_depth0):
+        """When metadata can't be fetched, uses raw IDs."""
+        tracing_result_depth0.references_explored = ["ref1"]
+        orchestrator.retriever.fetch_paper_by_id.return_value = None
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            papers_per_level=3,
+            visited_paper_ids={"seed123"},
+            tracing_results=[tracing_result_depth0],
+        )
+        orchestrator._populate_next_depth_queue(state)
+        assert state.pending_papers_at_depth == ["ref1"]
+
+
+class TestPopNextPaper:
+    """Test _pop_next_paper."""
+
+    def test_pops_from_cache(self, orchestrator, seed_paper):
+        ref_paper = CandidatePaper(
+            paper_id="ref1", title="Ref", authors=[], year=2018,
+        )
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            pending_papers_at_depth=["ref1"],
+            visited_paper_ids={"seed123"},
+        )
+        state._paper_cache = {"ref1": ref_paper}
+        result = orchestrator._pop_next_paper(state)
+        assert result == ref_paper
+
+    def test_fetches_if_not_cached(self, orchestrator):
+        ref_paper = CandidatePaper(
+            paper_id="ref1", title="Ref", authors=[], year=2018,
+        )
+        orchestrator.retriever.fetch_paper_by_id.return_value = ref_paper
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            pending_papers_at_depth=["ref1"],
+            visited_paper_ids={"seed123"},
+        )
+        result = orchestrator._pop_next_paper(state)
+        assert result == ref_paper
+
+    def test_skips_visited_papers(self, orchestrator):
+        ref_paper = CandidatePaper(
+            paper_id="ref2", title="Ref 2", authors=[], year=2018,
+        )
+        orchestrator.retriever.fetch_paper_by_id.return_value = ref_paper
+
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            pending_papers_at_depth=["ref1", "ref2"],
+            visited_paper_ids={"seed123", "ref1"},  # ref1 already visited
+        )
+        result = orchestrator._pop_next_paper(state)
+        assert result.paper_id == "ref2"
+
+    def test_empty_queue_returns_none(self, orchestrator):
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            pending_papers_at_depth=[],
+        )
+        result = orchestrator._pop_next_paper(state)
+        assert result is None
+
+    def test_all_unfetchable_returns_none(self, orchestrator):
+        orchestrator.retriever.fetch_paper_by_id.return_value = None
+        state = PipelineState(
+            user_concept="test",
+            current_depth=1,
+            pending_papers_at_depth=["bad1", "bad2"],
+            visited_paper_ids=set(),
+        )
+        result = orchestrator._pop_next_paper(state)
+        assert result is None
+
+
+# ── HITL graph review ──────────────────────────────────────────────────────
+
+class TestNodeHitlGraphReview:
+    """Test _node_hitl_graph_review."""
+
+    def test_approved(self, orchestrator, tracing_result_depth0, seed_paper):
+        orchestrator.hitl.gate_graph_review.return_value = True
+        state = PipelineState(
+            user_concept="test",
+            tracing_results=[tracing_result_depth0],
+            selected_seed=seed_paper,
+        )
+        result = orchestrator._node_hitl_graph_review(state)
+        assert result.hitl_graph_approved is True
+
+    def test_rejected(self, orchestrator, tracing_result_depth0, seed_paper):
+        orchestrator.hitl.gate_graph_review.return_value = False
+        state = PipelineState(
+            user_concept="test",
+            tracing_results=[tracing_result_depth0],
+            selected_seed=seed_paper,
+        )
+        result = orchestrator._node_hitl_graph_review(state)
+        assert result.hitl_graph_approved is False
+
+    def test_calls_tracing_complete_callback(self, orchestrator, tracing_result_depth0, seed_paper):
+        callback = MagicMock()
+        orchestrator.config["_tracing_complete_callback"] = callback
+        orchestrator.hitl.gate_graph_review.return_value = True
+
+        state = PipelineState(
+            user_concept="test",
+            tracing_results=[tracing_result_depth0],
+            selected_seed=seed_paper,
+        )
+        orchestrator._node_hitl_graph_review(state)
+        callback.assert_called_once()
+
+
+# ── HITL Gate 3 ────────────────────────────────────────────────────────────
+
+class TestNodeHitlGate3:
+    """Test _node_hitl_gate_3."""
+
+    def test_approved(self, orchestrator, tracing_result_depth0):
+        orchestrator.hitl.gate_3_final_approval.return_value = True
+        state = PipelineState(
+            user_concept="test",
+            synthesis_text="synthesis",
+            tracing_results=[tracing_result_depth0],
+        )
+        result = orchestrator._node_hitl_gate_3(state)
+        assert result.hitl_gate_3_approved is True
+
+    def test_rejected_increments_retries(self, orchestrator, tracing_result_depth0):
+        orchestrator.hitl.gate_3_final_approval.return_value = False
+        state = PipelineState(
+            user_concept="test",
+            synthesis_text="synthesis",
+            tracing_results=[tracing_result_depth0],
+            challenger_retries=0,
+        )
+        result = orchestrator._node_hitl_gate_3(state)
+        assert result.hitl_gate_3_approved is False
+        assert result.challenger_retries == 1
+
+
+# ── Challenge debate retry ──────────────────────────────────────────────────
+
+class TestNodeChallengeDebateRetry:
+    """Test _node_challenge debate retry path (challenger_retries > 0)."""
+
+    def test_debate_retry_seeds_previous_critique(self, orchestrator, tracing_result_depth0):
+        """On debate retry, previous critique is passed as context."""
+        orchestrator.challenger.run.return_value = "Updated critique"
+        orchestrator.challenger.last_issues = []
+        orchestrator.challenger.last_recommendation = "accept"
+
+        state = PipelineState(
+            user_concept="test",
+            synthesis_text="Synthesis",
+            tracing_results=[tracing_result_depth0],
+            challenger_retries=1,
+            challenger_critique="Previous critique",
+            challenger_issues=[{"issue": "old issue"}],
+        )
+        result = orchestrator._node_challenge(state)
+        assert result.challenger_critique == "Updated critique"
+        # previous_critique was passed to challenger.run
+        call_kwargs = orchestrator.challenger.run.call_args[1]
+        assert call_kwargs["previous_critique"] == "Previous critique"
