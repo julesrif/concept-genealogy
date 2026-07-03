@@ -37,6 +37,7 @@ from typing import Any
 
 import httpx
 
+from core.config import load_config
 from core.state import CandidatePaper
 
 logger = logging.getLogger(__name__)
@@ -513,7 +514,9 @@ def debug_search(concept: str, api_key: str = "") -> None:
         print(f"Using API key: {api_key[:8]}...")
     else:
         print("WARNING: No API key - unauthenticated requests (429 likely)")
-    agent = RetrieverAgent({"semantic_scholar_api_key": api_key, "max_candidates": 5, "sjr_csv_path": "data/sjr_dataset.csv"})
+
+    config = load_config()
+    agent = RetrieverAgent({"semantic_scholar_api_key": config.semantic_scholar_api_key, "max_candidates": config.max_candidates, "sjr_csv_path": config.sjr_csv_path})
     print(f"\n=== RAW Semantic Scholar response for '{concept}' ===\n")
     raw = agent._search_semantic_scholar(concept)
     print(f"Papers returned: {len(raw)}")

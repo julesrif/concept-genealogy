@@ -14,9 +14,13 @@ Pydantic BaseSettings reads from environment variables automatically, giving us:
   - No scattered os.getenv() calls throughout the codebase
 """
 
+from anyio import Path
+
+from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BACKEND_ROOT = Path(__file__).resolve().parent
 
 class Config(BaseSettings):
     """
@@ -71,7 +75,7 @@ class Config(BaseSettings):
     # Path to local SJR CSV dataset (SCImago Journal & Country Rank, n.d.)
     # Downloaded from: https://www.scimagojr.com/journalrank.php
     # Kept local to avoid runtime HTTP dependency for ranking (design proposal 7)
-    sjr_csv_path: str = "data/scimagojr2025.csv"
+    sjr_csv_path: str = str(BACKEND_ROOT / "data" / "scimagojr2025.csv")
 
     # ── Storage ────────────────────────────────────────────────────────────────
     database_url: str = "postgresql://postgres:postgres@localhost:5432/concept_genealogy"
