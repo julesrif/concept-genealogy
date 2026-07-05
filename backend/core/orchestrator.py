@@ -155,10 +155,10 @@ class Orchestrator:
             self._route_after_tracing,
         )
 
-        # HITL Graph Review: approved -> synthesise; rejected -> fail
+        # HITL Graph Review: approved -> synthesise; rejected -> back to seed selection
         graph.add_conditional_edges(
             "hitl_graph_review",
-            lambda state: "synthesise" if state.get("hitl_graph_approved") else END,
+            lambda state: "synthesise" if state.get("hitl_graph_approved") else "retrieve",
         )
 
         # After tracing completes -> synthesise
@@ -646,7 +646,18 @@ class Orchestrator:
         approved = self.hitl.gate_graph_review()
         state.hitl_graph_approved = approved
         if not approved:
-            self._progress("Graph rejected. Pipeline stopped.", "WARNING")
+            self._progress(
+                "Graph rejected. Returning to seed selection — choose a different paper.",
+                "WARNING",
+            )
+            # Reset tracing state so a fresh seed can be selected
+            state.selected_seed = None
+            state.current_depth = 0
+            state.tracing_results = []
+            state.visited_paper_ids = set()
+            state.pending_papers_at_depth = []
+            state.concept_at_depth = {}
+            state.hitl_gate_1_approved = False
         return state
 
     def _node_synthesise(self, state: PipelineState) -> PipelineState:
@@ -760,8 +771,21 @@ class Orchestrator:
 
     def _node_hitl_gate_3(self, state: PipelineState) -> PipelineState:
         """HITL Gate 3: present final output to user, await final approval."""
+        tracing_papers = [
+            {
+                "paper_title": r.paper_title,
+                "paper_id": r.paper_id,
+                "authors": r.authors,
+                "depth": r.depth,
+                "doi": r.doi,
+                "num_claims": len(r.claims),
+            }
+            for r in state.tracing_results
+            if r.claims
+        ]
         approved = self.hitl.gate_3_final_approval(
-            state.synthesis_text, state.challenger_critique, state.challenger_issues
+            state.synthesis_text, state.challenger_critique, state.challenger_issues,
+            tracing_papers=tracing_papers,
         )
         state.hitl_gate_3_approved = approved
         if not approved:

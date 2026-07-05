@@ -14,13 +14,12 @@ Pydantic BaseSettings reads from environment variables automatically, giving us:
   - No scattered os.getenv() calls throughout the codebase
 """
 
-from anyio import Path
-
 from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BACKEND_ROOT = Path(__file__).resolve().parent
+# __file__ is core/config.py, so .parent.parent reaches the backend root
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 class Config(BaseSettings):
     """

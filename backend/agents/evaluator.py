@@ -160,7 +160,10 @@ class EvaluatorAgent:
         evaluated: list[EvaluatedClaim] = []
         for idx, claim in enumerate(raw_claims, 1):
             logger.debug("Evaluating claim %d/%d", idx, total)
-            result = self._evaluate_claim(claim, active_concept, state.current_depth)
+            result = self._evaluate_claim(
+                claim, active_concept, state.current_depth,
+                original_concept=state.user_concept,
+            )
             if result is not None:
                 evaluated.append(result)
 
@@ -175,6 +178,7 @@ class EvaluatorAgent:
         claim: ExtractedClaim,
         user_concept: str,
         depth: int,
+        original_concept: str | None = None,
     ) -> EvaluatedClaim | None:
         """
         Evaluate a single claim. Returns None if the claim should be discarded.
@@ -182,6 +186,11 @@ class EvaluatorAgent:
         Two-stage gate:
           1. LLM relevance + validity scoring
           2. Threshold filter (discard if validity_score < RELEVANCE_THRESHOLD)
+
+        At depth > 0, if the abstracted concept differs from the original,
+        the claim is checked against BOTH concepts. A paper that references the
+        seed is inherently connected to the concept chain, so claims relevant to
+        either the original or the abstracted precursor concept are retained.
         """
         if not self.groq:
             # Graceful degradation: if LLM unavailable, pass all claims with score 0.5
@@ -194,8 +203,15 @@ class EvaluatorAgent:
                 relevant_concepts=[],
             )
 
+        # At depth > 0, include both concepts in the prompt so the LLM evaluates
+        # relevance to the full genealogy chain (not just the abstracted precursor)
+        if depth > 0 and original_concept and original_concept.lower() != user_concept.lower():
+            concept_str = f"{user_concept}\" (precursor of \"{original_concept}\")"
+        else:
+            concept_str = user_concept
+
         prompt = RELEVANCE_PROMPT.format(
-            concept=user_concept,
+            concept=concept_str,
             claim=claim.claim_text,
         )
 

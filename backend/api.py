@@ -300,10 +300,12 @@ class WebHITLGate:
         synthesis_text: Optional[str],
         challenger_critique: Optional[str],
         challenger_issues: list[dict] | None = None,
+        tracing_papers: list[dict] | None = None,
     ) -> bool:
         gate = GateRequest(
             gate_type=GateType.FINAL_APPROVAL,
             synthesis_text=synthesis_text,
+            tracing_papers=tracing_papers or [],
             challenger_critique=challenger_critique,
             challenger_issues=challenger_issues or [],
         )

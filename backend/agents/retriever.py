@@ -67,9 +67,15 @@ class RetrieverAgent:
     _MIN_REQUEST_INTERVAL = 1.1  # seconds (free tier safe)
     _MIN_REQUEST_INTERVAL_KEYED = 0.15  # seconds (with API key)
 
+    # Design constraint: seed selection presents exactly 3 options to the user.
+    # This is a hard cap regardless of config - the HITL gate is designed for 3 choices.
+    MAX_SEED_CANDIDATES = 3
+
     def __init__(self, config: dict[str, Any]):
         self.config = config
-        self.max_candidates = config.get("max_candidates", 3)
+        self.max_candidates = min(
+            config.get("max_candidates", 3), self.MAX_SEED_CANDIDATES
+        )
         self.api_key = config.get("semantic_scholar_api_key", "")
         self.sjr_index = self._load_sjr_index(config.get("sjr_csv_path", "data/sjr_dataset.csv"))
         self._last_request_time: float = 0.0
@@ -466,9 +472,11 @@ class RetrieverAgent:
         but sufficient for MVP - exact ISSN matching would require a separate
         venue metadata lookup pass and is deferred to a future iteration.
         """
+        from pathlib import Path as _Path
+        resolved = _Path(csv_path.replace("\\", "/"))
         sjr_index: dict[str, float] = {}
         try:
-            with open(csv_path, newline="", encoding="utf-8") as f:
+            with open(resolved, newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter=";")
                 for row in reader:
                     title = row.get("Title", "").lower().strip()

@@ -29,6 +29,7 @@
         <div class="run-header-top">
           <h2>{{ run.user_concept }}</h2>
           <span :class="'badge badge-' + statusClass(run.status)">{{ run.status }}</span>
+          <span v-if="run.status === 'running'" class="spinner"></span>
         </div>
         <p class="run-meta">Run ID: {{ run.run_id }} | Stage: {{ run.stage }}</p>
       </div>
@@ -218,11 +219,11 @@
         <div class="synthesis-content">
           <div class="markdown-body" v-html="renderMarkdown(run.current_gate.synthesis_text || '(empty synthesis)')"></div>
         </div>
-        <!-- Traced papers references -->
-        <div v-if="run.current_gate.tracing_papers?.length" class="tracing-references">
-          <h4>📚 References ({{ run.current_gate.tracing_papers.length }} papers traced)</h4>
+        <!-- Traced papers references (only those cited in synthesis) -->
+        <div v-if="gate2CitedPapers.length" class="tracing-references">
+          <h4>📚 References ({{ gate2CitedPapers.length }} cited)</h4>
           <ul class="reference-list">
-            <li v-for="(paper, idx) in run.current_gate.tracing_papers" :key="paper.paper_id" class="reference-item">
+            <li v-for="(paper, idx) in gate2CitedPapers" :key="paper.paper_id" class="reference-item">
               <span class="ref-number">[{{ idx + 1 }}]</span>
               <span class="ref-title">{{ paper.paper_title }}</span>
               <span v-if="paper.authors?.length" class="ref-authors">
@@ -251,12 +252,35 @@
       <div v-if="run.current_gate?.gate_type === 'final_approval'" class="card gate-card">
         <h3>🏁 Gate 3: Final Approval</h3>
         <p class="gate-desc">
-          Review the final output including the Challenger's critique.
+          Review the synthesis and the Challenger's adversarial critique.
+          <strong>Conceptual drift</strong> tracks how the meaning of a concept shifts across citation depths —
+          e.g. a seed paper defines "X" one way, but a depth-2 paper uses "X" with a subtly different meaning.
+          We are not comparing papers (each paper may cover a different topic); we are tracking how
+          the <em>referenced concept</em> evolves or diverges through the citation chain.
           Approving will persist results to the database.
         </p>
         <div class="synthesis-content">
           <h4>Synthesis</h4>
           <div class="markdown-body" v-html="renderMarkdown(run.current_gate.synthesis_text || '(no synthesis)')"></div>
+        </div>
+        <!-- Traced papers references (only those cited in synthesis) -->
+        <div v-if="gate3CitedPapers.length" class="tracing-references">
+          <h4>📚 References ({{ gate3CitedPapers.length }} cited)</h4>
+          <ul class="reference-list">
+            <li v-for="(paper, idx) in gate3CitedPapers" :key="paper.paper_id" class="reference-item">
+              <span class="ref-number">[{{ idx + 1 }}]</span>
+              <span class="ref-title">{{ paper.paper_title }}</span>
+              <span v-if="paper.authors?.length" class="ref-authors">
+                - {{ paper.authors.slice(0, 3).join(', ') }}<span v-if="paper.authors.length > 3"> et al.</span>
+              </span>
+              <span class="ref-meta">
+                (Depth {{ paper.depth }}, {{ paper.num_claims }} claim{{ paper.num_claims !== 1 ? 's' : '' }})
+              </span>
+              <span v-if="paper.doi" class="ref-doi">
+                DOI: <a :href="'https://doi.org/' + paper.doi" target="_blank">{{ paper.doi }}</a>
+              </span>
+            </li>
+          </ul>
         </div>
         <div v-if="challengerData" class="synthesis-content challenger">
           <h4>🛡️ Challenger Adversarial Review</h4>
@@ -323,7 +347,7 @@
           <div
             v-for="(entry, idx) in logs"
             :key="idx"
-            :class="['log-entry', 'log-' + entry.level.toLowerCase()]"
+            :class="['log-entry', 'log-' + entry.level.toLowerCase(), { 'log-agent': isAgentSource(entry.source) }]"
           >
             <span class="log-time">{{ formatLogTime(entry.timestamp) }}</span>
             <span class="log-level">{{ entry.level }}</span>
@@ -437,7 +461,7 @@ const challengerData = computed(() => {
   const typeLabels = {
     unsupported: 'Unsupported claim',
     overstated: 'Overstated conclusion',
-    drift: 'Conceptual drift',
+    drift: 'Conceptual drift (meaning shifted across depths)',
     missing_counter: 'Missing counter-evidence',
   }
   const severityConfig = {
@@ -480,6 +504,7 @@ function renderMarkdown(text) {
     .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/<\/ul>\s*<ul>/g, '')
     .replace(/\[Source: ([^\]]+)\]/g, '<cite>[$1]</cite>')
+    .replace(/\[(\d+)\]/g, '<span class="inline-ref">[$1]</span>')
     .replace(/\n{2,}/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^/, '<p>').replace(/$/, '</p>')
@@ -487,6 +512,28 @@ function renderMarkdown(text) {
     .replace(/<p><ul>/g, '<ul>').replace(/<\/ul><\/p>/g, '</ul>')
     .replace(/<p><blockquote>/g, '<blockquote>').replace(/<\/blockquote><\/p>/g, '</blockquote>')
     .replace(/<p><\/p>/g, '')
+}
+
+// Filter tracing_papers to only those actually cited [N] in the synthesis text
+const gate2CitedPapers = computed(() => {
+  const gate = run.value?.current_gate
+  if (!gate?.tracing_papers?.length || !gate.synthesis_text) return []
+  const matches = gate.synthesis_text.match(/\[(\d+)\]/g) || []
+  const citedIndices = new Set(matches.map(m => parseInt(m.replace(/[\[\]]/g, ''), 10) - 1))
+  return gate.tracing_papers.filter((_, idx) => citedIndices.has(idx))
+})
+
+const gate3CitedPapers = computed(() => {
+  const gate = run.value?.current_gate
+  if (gate?.gate_type !== 'final_approval') return []
+  if (!gate?.tracing_papers?.length || !gate.synthesis_text) return []
+  const matches = gate.synthesis_text.match(/\[(\d+)\]/g) || []
+  const citedIndices = new Set(matches.map(m => parseInt(m.replace(/[\[\]]/g, ''), 10) - 1))
+  return gate.tracing_papers.filter((_, idx) => citedIndices.has(idx))
+})
+
+function isAgentSource(source) {
+  return source && source.startsWith('agents.')
 }
 
 function isStageActive(key) {
@@ -637,6 +684,21 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+  border: 2px solid #93c5fd;
+  border-top-color: #1d4ed8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .run-header h2 {
@@ -951,6 +1013,10 @@ onUnmounted(() => {
   color: var(--color-primary, #2563eb);
   margin-right: 0.4rem;
 }
+.inline-ref {
+  font-weight: 700;
+  color: #1d4ed8;
+}
 .ref-title {
   font-weight: 600;
 }
@@ -1254,6 +1320,11 @@ onUnmounted(() => {
   color: #7dd3fc;
   flex-shrink: 0;
   min-width: 8rem;
+}
+
+.log-entry.log-agent .log-source {
+  color: #4ade80;
+  font-weight: 700;
 }
 
 .log-msg {

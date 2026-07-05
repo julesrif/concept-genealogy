@@ -937,6 +937,12 @@ class TestNodeHitlGraphReview:
         )
         result = orchestrator._node_hitl_graph_review(state)
         assert result.hitl_graph_approved is False
+        # Graph rejection resets tracing state for a fresh seed selection
+        assert result.selected_seed is None
+        assert result.current_depth == 0
+        assert result.tracing_results == []
+        assert result.visited_paper_ids == set()
+        assert result.hitl_gate_1_approved is False
 
     def test_calls_tracing_complete_callback(self, orchestrator, tracing_result_depth0, seed_paper):
         callback = MagicMock()

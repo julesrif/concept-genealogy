@@ -76,10 +76,10 @@ CHALLENGE_USER_PROMPT = """## Synthesis Under Review:
 1. Check every factual statement in the synthesis against the traced evidence
 2. Identify claims that lack supporting evidence from the traced papers
 3. Flag any overstated conclusions (weak evidence presented as definitive)
-4. Note conceptual drift at deeper depth levels. Drift means the claim's usage of "{concept}" has diverged from the gold-standard seed paper definition. Assess drift on three axes:
-   - Historical use: how the seed paper defined the concept
-   - Current use: how the claim at this depth redefines or applies it
-   - Evolutionary path: the step-by-step transformation through the citation chain
+4. Note conceptual drift at deeper depth levels. Drift means the claim's usage of "{concept}" has diverged from the gold-standard seed paper definition. We are NOT comparing papers to each other (each paper may cover a different topic); we are tracking how the *referenced concept* changes meaning across the citation chain. Assess drift on three axes:
+   - Seed definition: how the seed paper (depth 0) defined/used the concept
+   - Downstream usage: how the claim at this depth redefines, narrows, or shifts the concept
+   - Evolutionary path: the step-by-step semantic transformation through each depth level
 5. Identify missing caveats or counter-evidence
 
 Provide your structured critique."""

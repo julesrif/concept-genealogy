@@ -40,10 +40,10 @@ class TestRetrieverInit:
         assert agent.sjr_index == {}
 
     def test_max_candidates_from_config(self, base_config):
-        """max_candidates is read from config."""
+        """max_candidates is capped at MAX_SEED_CANDIDATES (3) design constraint."""
         base_config["max_candidates"] = 5
         agent = RetrieverAgent(base_config)
-        assert agent.max_candidates == 5
+        assert agent.max_candidates == 3  # hard cap: seed selection presents exactly 3
 
 
 class TestParsePaper:

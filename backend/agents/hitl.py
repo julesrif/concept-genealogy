@@ -209,6 +209,7 @@ class HITLGate:
         synthesis_text: str | None,
         challenger_critique: str | None,
         challenger_issues: list[dict] | None = None,
+        tracing_papers: list[dict] | None = None,
     ) -> bool:
         """
         Gate 3: present final output (synthesis + challenger critique) for approval.
