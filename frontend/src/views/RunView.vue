@@ -74,8 +74,8 @@
               <span>Year: {{ paper.year || 'N/A' }}</span>
               <span>Citations: {{ paper.citation_count || 0 }}</span>
               <span v-if="paper.sjr_score" class="sjr-score">SJR: {{ paper.sjr_score.toFixed(2) }}</span>
-              <span :class="paper.open_access_url ? 'oa-yes' : paper.doi ? 'oa-doi' : 'oa-no'">
-                {{ paper.open_access_url ? '✓ Open Access' : paper.doi ? '✓ Full-text (via DOI)' : '✗ Abstract only' }}
+              <span :class="paper.open_access_url ? 'oa-yes' : paper.doi?.startsWith('10.1016/') ? 'oa-doi' : paper.doi ? 'oa-doi-warn' : 'oa-no'">
+                {{ paper.open_access_url ? '✓ Open Access' : paper.doi?.startsWith('10.1016/') ? '✓ Full-text (Elsevier API)' : paper.doi ? '⚠ Full-text (via DOI)' : '✗ Abstract only' }}
               </span>
               <a
                 v-if="paper.doi"
@@ -963,6 +963,10 @@ onUnmounted(() => {
 
 .oa-doi {
   color: var(--color-success);
+}
+
+.oa-doi-warn {
+  color: #d97706;
 }
 
 .oa-no {

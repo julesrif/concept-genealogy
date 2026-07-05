@@ -98,12 +98,17 @@ class CitationExtractorAgent:
         """
         Main entry point. Returns extracted claims for a paper at a given depth.
 
-        Extraction strategy (fallback chain):
-          1. If open_access_url is available -> download PDF -> extract full text
-          2. If DOI is available and Elsevier key configured -> fetch via Elsevier API
-          3. Otherwise -> use abstract (flagged as low confidence)
-          4. Call Groq LLM with extraction prompt
-          5. Inspector validates JSON output (called from Orchestrator after return)
+        Extraction strategy (priority-ordered fallback chain):
+          1. Open Access PDF (most reliable - no anti-bot, no API key needed)
+          2. Elsevier Article Retrieval API (reliable with API key, covers 10.1016/ DOIs)
+          3. Direct DOI PDF download (least reliable - often blocked by captchas/anti-bot)
+          4. Abstract-only (last resort, flagged as low confidence)
+          5. Call Groq LLM with extraction prompt
+          6. Inspector validates JSON output (called from Orchestrator after return)
+
+        For Elsevier DOIs (10.1016/): Elsevier API is attempted before OA PDF because
+        Semantic Scholar's openAccessPdf URLs for Elsevier papers often point to
+        ScienceDirect landing pages that serve captchas instead of actual PDFs.
         """
         logger.info(
             "CitationExtractor: processing paper '%s' (depth=%d, oa=%s, doi=%s)",
@@ -112,26 +117,45 @@ class CitationExtractorAgent:
 
         text = ""
         confidence = self.abstract_confidence
+        is_elsevier_doi = paper.doi and paper.doi.startswith("10.1016/")
 
-        # Strategy 1: Open-access PDF
-        if paper.open_access_url:
-            text, confidence = self._extract_from_pdf(paper.open_access_url, paper.title)
-
-        # Strategy 2: Elsevier full-text via DOI
-        if not text.strip() and paper.doi and self.elsevier:
-            logger.info("CitationExtractor: trying Elsevier for DOI '%s'", paper.doi)
+        # For Elsevier DOIs: try Elsevier API first (more reliable than OA/DOI download)
+        if is_elsevier_doi and self.elsevier:
+            logger.info(
+                "CitationExtractor: Elsevier DOI detected ('%s') - trying API first",
+                paper.doi,
+            )
             elsevier_text = self.elsevier.get_full_text(paper.doi)
             if elsevier_text:
                 text = elsevier_text[:self.max_text_chars]
                 confidence = 1.0
                 logger.info(
-                    "CitationExtractor: Elsevier provided %d chars for '%s'",
-                    len(text), paper.title
+                    "CitationExtractor: Elsevier API provided %d chars for '%s'",
+                    len(text), paper.title,
                 )
 
-        # Strategy 3: Direct DOI PDF download (many publishers serve free PDFs)
+        # Strategy 1: Open-access PDF (skip if Elsevier already succeeded)
+        if not text.strip() and paper.open_access_url:
+            text, confidence = self._extract_from_pdf(paper.open_access_url, paper.title)
+
+        # Strategy 2: Elsevier full-text via DOI (for non-10.1016 DOIs that Elsevier might still cover)
+        if not text.strip() and paper.doi and self.elsevier and not is_elsevier_doi:
+            logger.info("CitationExtractor: trying Elsevier API for DOI '%s'", paper.doi)
+            elsevier_text = self.elsevier.get_full_text(paper.doi)
+            if elsevier_text:
+                text = elsevier_text[:self.max_text_chars]
+                confidence = 1.0
+                logger.info(
+                    "CitationExtractor: Elsevier API provided %d chars for '%s'",
+                    len(text), paper.title,
+                )
+
+        # Strategy 3: Direct DOI PDF download (least reliable - captchas/anti-bot)
         if not text.strip() and paper.doi:
-            logger.info("CitationExtractor: trying direct DOI PDF for '%s'", paper.doi)
+            logger.info(
+                "CitationExtractor: trying direct DOI PDF for '%s' (least reliable)",
+                paper.title,
+            )
             text, confidence = self._extract_from_doi_pdf(paper.doi, paper.title)
 
         # Strategy 4: Abstract-only fallback
@@ -140,8 +164,8 @@ class CitationExtractorAgent:
             confidence = self.abstract_confidence
             logger.info(
                 "CitationExtractor: no full text for '%s' - using abstract only "
-                "(confidence=%.2f). Full text unavailable via PDF or Elsevier.",
-                paper.title, confidence
+                "(confidence=%.2f). Full text unavailable via OA PDF, Elsevier API, or DOI.",
+                paper.title, confidence,
             )
 
         if not text.strip():
@@ -223,7 +247,17 @@ class CitationExtractorAgent:
         Many publishers (Annual Reviews, PNAS, etc.) serve free PDFs that are
         not indexed in Semantic Scholar's openAccessPdf field. This follows the
         DOI URL, checks if the final response is a PDF, and extracts text.
+
+        NOTE: This is the LEAST reliable strategy. Publisher sites frequently
+        block automated requests with captchas, anti-bot systems, or redirects
+        to login pages. Elsevier (10.1016/) and Springer (10.1007/) are notorious.
         """
+        if doi.startswith("10.1016/"):
+            logger.debug(
+                "CitationExtractor: direct DOI download for Elsevier DOI %s "
+                "(likely blocked by anti-bot - Elsevier API is preferred)",
+                doi,
+            )
         try:
             import fitz  # PyMuPDF
 
