@@ -183,10 +183,11 @@ class PipelineState(BaseModel):
     # Beyond 3 iterations, LLM output variance plateaus (Atıl et al., 2025).
     max_synthesiser_retries: int = 3
     challenger_retries: int = 0
-    # max_challenger_retries=3: Gate 3 rejection loops back to the Challenger
-    # (not to Synthesis). Each retry re-runs the adversarial debate on the same
-    # synthesis, asking the Challenger to dig deeper. Matches the activity diagram
-    # "Debate Retry <= 3" routing. Cap at 3 to bound LLM cost.
+    # max_challenger_retries=3: Gate 3 rejection routes back to Synthesis with
+    # the challenger's feedback integrated, then re-challenges the revised output.
+    # This ensures unsupported claims identified by the Challenger are actually
+    # addressed in the next iteration. Cap at 3 to bound LLM cost (each retry
+    # costs 1 synthesis + 1 challenge = 2 LLM calls on the 70b model).
     max_challenger_retries: int = 3
 
     # HITL gate flags

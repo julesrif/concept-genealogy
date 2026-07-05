@@ -240,13 +240,14 @@ class TestRouteAfterFinalReview:
         state = {"hitl_gate_3_approved": True}
         assert orchestrator._route_after_final_review(state) == "persist"
 
-    def test_rejected_under_cap_routes_to_challenge(self, orchestrator):
+    def test_rejected_under_cap_routes_to_synthesise(self, orchestrator):
+        """Gate 3 rejection routes to synthesise so feedback is integrated."""
         state = {
             "hitl_gate_3_approved": False,
             "challenger_retries": 1,
             "max_challenger_retries": 3,
         }
-        assert orchestrator._route_after_final_review(state) == "challenge"
+        assert orchestrator._route_after_final_review(state) == "synthesise"
 
     def test_rejected_at_cap_routes_to_persist(self, orchestrator):
         state = {

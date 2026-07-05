@@ -294,14 +294,15 @@ class Orchestrator:
         """
         Route after HITL Gate 3 (final review post-challenge).
 
-        Activity diagram flow: Gate 3 rejection loops back to the Challenger
-        (debate retry), NOT back to Synthesis. The user already approved the
-        synthesis at Gate 2; Gate 3 rejection means the adversarial review
-        needs another pass.
+        Gate 3 rejection means the challenger identified issues that must be
+        addressed. The correct flow is: re-synthesise with challenger feedback
+        integrated, then re-challenge the revised synthesis. Routing to
+        'synthesise' (not 'challenge') ensures the Synthesiser incorporates
+        the critique into a revised output before the Challenger reviews again.
 
         If approved -> persist.
-        If rejected and debate retry cap NOT reached -> re-challenge.
-        If rejected and debate retry cap reached -> persist with partial_consensus.
+        If rejected and retry cap NOT reached -> re-synthesise (with feedback).
+        If rejected and retry cap reached -> persist with partial_consensus.
         """
         if state.get("hitl_gate_3_approved"):
             return "persist"
@@ -315,7 +316,7 @@ class Orchestrator:
             )
             state["synthesis_status"] = "partial_consensus"
             return "persist"
-        return "challenge"
+        return "synthesise"
 
     @staticmethod
     def _wrap_node(fn):
@@ -655,12 +656,16 @@ class Orchestrator:
 
         total_claims = sum(len(r.claims) for r in state.tracing_results)
 
-        # On retry, include challenger feedback so the synthesiser addresses the issues
+        # On retry, include challenger feedback so the synthesiser addresses the issues.
+        # This triggers both when Gate 2 rejects (synthesiser_retries > 0) and when
+        # Gate 3 rejects (challenger_retries > 0), since both paths indicate the
+        # synthesis needs revision based on the challenger's critique.
         feedback = None
-        if state.synthesiser_retries > 0 and state.challenger_critique:
+        if state.challenger_critique:
             feedback = state.challenger_critique
+            retry_num = state.synthesiser_retries + state.challenger_retries
             self._progress(
-                f"Re-synthesising (attempt {state.synthesiser_retries + 1}) "
+                f"Re-synthesising (revision {retry_num}) "
                 f"incorporating challenger feedback..."
             )
         else:
