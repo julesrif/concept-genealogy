@@ -516,7 +516,7 @@ def debug_search(concept: str, api_key: str = "") -> None:
         print("WARNING: No API key - unauthenticated requests (429 likely)")
 
     config = load_config()
-    agent = RetrieverAgent({"semantic_scholar_api_key": config.semantic_scholar_api_key, "max_candidates": config.max_candidates, "sjr_csv_path": config.sjr_csv_path})
+    agent = RetrieverAgent({"semantic_scholar_api_key": api_key, "max_candidates": config.max_candidates, "sjr_csv_path": config.sjr_csv_path})
     print(f"\n=== RAW Semantic Scholar response for '{concept}' ===\n")
     raw = agent._search_semantic_scholar(concept)
     print(f"Papers returned: {len(raw)}")
