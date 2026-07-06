@@ -810,113 +810,134 @@ class Orchestrator:
         """
         Populate pending_papers_at_depth from the previous depth's references.
 
-        PROVENANCE-FIRST STRATEGY:
-        The system traces attributed concepts — when Paper A says "X [ref]", we
-        follow ref to verify if the meaning of X is preserved or has drifted.
-        Therefore, references that appear in extracted claims' inline_citations
-        are prioritised over other references. This ensures we trace the actual
-        provenance chain rather than random co-references.
-
-        Priority order:
-          1. References cited alongside relevant claims (provenance chain)
-          2. Remaining references ranked by SJR (broader context)
+        PROVENANCE-FIRST + PER-PARENT ALLOCATION:
+        papers_per_level means N references PER parent paper, not N total.
+        Each parent at the previous depth contributes up to papers_per_level
+        children to the next depth queue. Within each parent's allocation,
+        references cited in extracted claims (provenance chain) are prioritised
+        over SJR-ranked references.
         """
         latest_depth = state.current_depth - 1
         papers_per_level = state.papers_per_level or 3
-        all_new_refs = []
+
+        # Collect references per parent paper (preserves provenance lineage)
+        refs_by_parent: dict[str, list[str]] = {}
         for result in state.tracing_results:
             if result.depth == latest_depth:
+                parent_refs = []
                 for ref_id in result.references_explored:
-                    if ref_id not in state.visited_paper_ids and ref_id not in all_new_refs:
-                        all_new_refs.append(ref_id)
+                    if ref_id not in state.visited_paper_ids:
+                        parent_refs.append(ref_id)
+                if parent_refs:
+                    refs_by_parent[result.paper_id] = parent_refs
 
-        if not all_new_refs:
+        if not refs_by_parent:
             state.pending_papers_at_depth = []
             return
 
-        # Collect inline citations from evaluated claims at the latest depth.
-        # These are the references explicitly attributed in the text (provenance chain).
-        cited_refs = set()
+        # Collect inline citations from evaluated claims at the latest depth
+        cited_refs_by_parent: dict[str, set[str]] = {}
         for result in state.tracing_results:
             if result.depth == latest_depth:
+                cites = set()
                 for claim in result.claims:
                     for cite in claim.inline_citations:
-                        cited_refs.add(cite.strip().lower())
+                        cites.add(cite.strip().lower())
+                cited_refs_by_parent[result.paper_id] = cites
 
-        # Fetch metadata for candidates — fetch more if we have cited refs to match
-        fetch_pool_size = min(len(all_new_refs), max(papers_per_level * 3, 10))
-        candidates = []
-        for ref_id in all_new_refs[:fetch_pool_size]:
+        # Fetch metadata for all candidate refs (deduplicated)
+        all_unique_refs = list({r for refs in refs_by_parent.values() for r in refs})
+        num_parents = len(refs_by_parent)
+        fetch_pool_size = min(len(all_unique_refs), num_parents * papers_per_level * 2)
+        paper_metadata: dict[str, "CandidatePaper"] = {}
+        for ref_id in all_unique_refs[:fetch_pool_size]:
             paper = self.retriever.fetch_paper_by_id(ref_id)
             if paper:
-                candidates.append(paper)
+                paper_metadata[paper.paper_id] = paper
 
-        if not candidates:
-            state.pending_papers_at_depth = all_new_refs[:papers_per_level]
-            return
-
-        # Score candidates: prioritise those matching inline citations (provenance chain)
-        def _citation_priority(paper) -> float:
-            """
-            Returns a priority boost for papers that match inline citations.
-            Matching is fuzzy: checks if author surname + year appears in cited_refs,
-            or if the paper's DOI matches a cited DOI.
-            """
+        def _citation_priority(paper, cited_refs: set) -> float:
+            """Priority boost for papers matching inline citations."""
             if not cited_refs:
                 return 0.0
-            # Check DOI match
             if paper.doi and paper.doi.lower() in cited_refs:
                 return 10000.0
-            # Check author-year match (e.g., "smith, 2019", "smith et al., 2019")
             if paper.authors and paper.year:
                 first_author = paper.authors[0].split()[-1].lower() if paper.authors[0] else ""
                 year_str = str(paper.year)
                 for cite in cited_refs:
                     if first_author and first_author in cite and year_str in cite:
                         return 10000.0
-            # Check title words in citations (some formats cite by title fragment)
             if paper.title:
                 title_lower = paper.title.lower()
                 for cite in cited_refs:
-                    # If a citation string appears within the title or vice versa
                     if len(cite) > 10 and cite in title_lower:
                         return 5000.0
             return 0.0
 
-        # Combined score: citation priority + SJR
-        def _combined_score(paper) -> float:
-            cite_boost = _citation_priority(paper)
+        def _score_paper(paper, cited_refs: set) -> float:
+            cite_boost = _citation_priority(paper, cited_refs)
             sjr = (paper.sjr_score * 1000) if paper.sjr_score else float(paper.citation_count)
             return cite_boost + sjr
 
-        ranked = sorted(candidates, key=_combined_score, reverse=True)
+        # PER-PARENT ALLOCATION: each parent gets up to papers_per_level children
+        selected_ids: list[str] = []
+        selected_set: set[str] = set()
 
-        # Log how many candidates matched inline citations
-        cited_matches = sum(1 for p in ranked if _citation_priority(p) > 0)
-        if cited_matches:
-            logger.info(
-                "Provenance tracing: %d/%d candidates match inline citations from claims",
-                cited_matches, len(ranked)
-            )
-            self._progress(
-                f"Found {cited_matches} papers matching attributed references"
-            )
+        for parent_id, ref_ids in refs_by_parent.items():
+            cited_refs = cited_refs_by_parent.get(parent_id, set())
+            # Score all candidates for this parent
+            parent_candidates = [
+                (ref_id, _score_paper(paper_metadata[ref_id], cited_refs))
+                for ref_id in ref_ids
+                if ref_id in paper_metadata and ref_id not in selected_set
+            ]
+            parent_candidates.sort(key=lambda x: x[1], reverse=True)
 
-        state.pending_papers_at_depth = [p.paper_id for p in ranked[:papers_per_level]]
-        # Cache the fetched metadata so _pop_next_paper doesn't re-fetch
+            # Take top papers_per_level for this parent
+            taken = 0
+            for ref_id, _ in parent_candidates:
+                if taken >= papers_per_level:
+                    break
+                selected_ids.append(ref_id)
+                selected_set.add(ref_id)
+                taken += 1
+
+            # Fallback: if no metadata was available, pick raw ref IDs
+            if taken == 0:
+                for ref_id in ref_ids:
+                    if ref_id not in selected_set and taken < papers_per_level:
+                        selected_ids.append(ref_id)
+                        selected_set.add(ref_id)
+                        taken += 1
+
+        state.pending_papers_at_depth = selected_ids
+
+        # Cache fetched metadata
         if not hasattr(state, '_paper_cache'):
             state._paper_cache = {}
-        for p in ranked[:papers_per_level]:
-            state._paper_cache[p.paper_id] = p
+        for pid in selected_ids:
+            if pid in paper_metadata:
+                state._paper_cache[pid] = paper_metadata[pid]
 
+        # Log provenance stats
+        cited_matches = sum(
+            1 for pid in selected_ids
+            if pid in paper_metadata and any(
+                _citation_priority(paper_metadata[pid], cited_refs_by_parent.get(parent_id, set())) > 0
+                for parent_id in refs_by_parent
+            )
+        )
         self._progress(
             f"Advancing to depth {state.current_depth}: "
-            f"{len(state.pending_papers_at_depth)} papers to trace"
+            f"{len(selected_ids)} papers to trace "
+            f"(from {num_parents} parents, {papers_per_level} per parent, "
+            f"{cited_matches} citation-matched)"
         )
         logger.info(
-            "Populated depth %d queue: %d/%d new refs (papers_per_level=%d, %d cited matches)",
-            state.current_depth, len(state.pending_papers_at_depth),
-            len(all_new_refs), papers_per_level, cited_matches
+            "Populated depth %d queue: %d selected from %d parents "
+            "(%d per parent, %d cited matches, %d total candidate refs)",
+            state.current_depth, len(selected_ids), num_parents,
+            papers_per_level, cited_matches, len(all_unique_refs)
         )
 
     def _abstract_concept_for_depth(self, state: PipelineState, completed_depth: int) -> None:

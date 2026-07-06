@@ -253,10 +253,11 @@
         <h3>🏁 Gate 3: Final Approval</h3>
         <p class="gate-desc">
           Review the synthesis and the Challenger's adversarial critique.
-          <strong>Conceptual drift</strong> tracks how the meaning of a concept shifts across citation depths —
-          e.g. a seed paper defines "X" one way, but a depth-2 paper uses "X" with a subtly different meaning.
-          We are not comparing papers (each paper may cover a different topic); we are tracking how
-          the <em>referenced concept</em> evolves or diverges through the citation chain.
+          <strong>Conceptual drift</strong> tracks how the meaning of a concept changed over time —
+          the seed paper (depth 0) is the most recent paper with the modern definition,
+          while deeper depths are older predecessor papers. Drift measures how much
+          the <em>referenced concept's</em> historical usage in older papers diverges from
+          the seed paper's current formulation.
           Approving will persist results to the database.
         </p>
         <div class="synthesis-content">
