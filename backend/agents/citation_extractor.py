@@ -55,15 +55,29 @@ logger = logging.getLogger(__name__)
 # Providing the exact JSON schema in the prompt significantly reduces structural
 # validation failures (Cemri et al., 2025). The Inspector still validates output,
 # but a well-specified prompt reduces retry frequency and token waste.
-EXTRACTION_PROMPT = """You are a scientific claim extractor. Extract the key claims from the following academic paper text.
+EXTRACTION_PROMPT = """You are a scientific claim extractor specialising in provenance tracing.
+
+Your task: extract claims that are ATTRIBUTED TO OTHER SOURCES via inline citations.
+We need claims where the paper says "X showed/proposed/argued Y [ref]" — i.e., the paper
+is reporting what ANOTHER work said, so we can trace back to that source and verify.
+
+PRIORITY ORDER:
+  1. Referenced claims: statements explicitly attributed to cited works (e.g., "Smith (2019)
+     proposed...", "...has been shown effective [3]", "According to [1]...")
+  2. Foundational claims: statements grounding a concept with a citation (e.g., "X is defined
+     as Y [ref]", "The framework builds on Z [ref]")
+  3. Only if fewer than 5 referenced claims exist: include the paper's own key claims
 
 Return ONLY a JSON array with no preamble, no code fences, no explanation.
 Each element must have exactly these fields:
-  - "claim_text": string - one complete, standalone claim from the paper
-  - "inline_citations": array of strings - DOIs or author-year references cited within this claim
-  - "confidence": number between 0.0 and 1.0
+  - "claim_text": string - the complete claim as stated in the paper
+  - "inline_citations": array of strings - the specific references cited WITH this claim
+    (author-year format like "Smith, 2019" or bracket numbers like "[3]" or DOIs)
+  - "confidence": number between 0.0 and 1.0 (1.0 if the claim has a clear inline citation,
+    0.7 if attribution is implicit, 0.5 if it's the paper's own unreferenced claim)
 
-Extract 5-10 of the most significant claims. Focus on claims that introduce, support, or challenge a core concept.
+Extract 5-10 claims. STRONGLY PREFER claims that have inline citations — these are what
+enable genealogical tracing ("who said what, and can we verify it at the source?").
 
 Paper title: {title}
 Paper text:

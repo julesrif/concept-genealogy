@@ -93,6 +93,7 @@ class EvaluatedClaim(BaseModel):
     depth: int
     validity_score: float = Field(ge=0.0, le=1.0)
     relevant_concepts: list[str] = Field(default_factory=list)
+    inline_citations: list[str] = Field(default_factory=list)  # Carried from ExtractedClaim for provenance tracing
     drift_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     # drift_score measures semantic distance from parent claim embedding.
     # None at depth=0 (seed paper has no parent to drift from).

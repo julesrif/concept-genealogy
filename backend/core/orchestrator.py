@@ -427,17 +427,21 @@ class Orchestrator:
         # Truncate text to fit context window
         truncated = text[:8000]
         prompt = (
-            f"You are an academic concept analyst. Given the following paper, "
-            f"extract the KEY ACADEMIC CONCEPTS that this paper introduces, develops, "
-            f"or significantly contributes to.\n\n"
+            f"You are an academic concept analyst specialising in citation provenance.\n\n"
+            f"Given the following paper, extract the KEY CONCEPTS that are REFERENCED \n"
+            f"(i.e., concepts the paper attributes to other works via citations). These are \n"
+            f"concepts where the paper says 'X [ref]' — ideas borrowed, built upon, or \n"
+            f"reinterpreted from other sources.\n\n"
+            f"Also include concepts the paper INTRODUCES if they are well-defined and traceable.\n\n"
             f"Paper title: \"{title}\"\n"
             f"Paper text:\n{truncated}\n\n"
             f"Return ONLY a JSON array of concept strings (5-15 concepts). "
             f"Each concept should be 1-5 words, representing a distinct academic idea "
-            f"that could be traced through citation chains.\n"
-            f"Focus on: novel methods, frameworks, mechanisms, theories, and key techniques.\n"
+            f"that could be traced backward through citation chains (\"who originated this idea?\").\n"
+            f"Focus on: referenced methods, attributed frameworks, cited theories, \n"
+            f"and foundational techniques that the paper builds upon.\n"
             f"Do NOT include generic terms like 'machine learning' or 'deep learning' unless "
-            f"the paper specifically advances them.\n\n"
+            f"the paper specifically redefines or reinterprets them with a citation.\n\n"
             f"JSON array:"
         )
 
@@ -806,10 +810,16 @@ class Orchestrator:
         """
         Populate pending_papers_at_depth from the previous depth's references.
 
-        Called at the start of trace_citation (depth > 0) when the queue is empty.
-        Collects all unvisited reference IDs from papers traced at (current_depth - 1),
-        fetches their metadata, ranks by SJR, and takes the top papers_per_level.
-        This ensures we trace the highest-quality references first.
+        PROVENANCE-FIRST STRATEGY:
+        The system traces attributed concepts — when Paper A says "X [ref]", we
+        follow ref to verify if the meaning of X is preserved or has drifted.
+        Therefore, references that appear in extracted claims' inline_citations
+        are prioritised over other references. This ensures we trace the actual
+        provenance chain rather than random co-references.
+
+        Priority order:
+          1. References cited alongside relevant claims (provenance chain)
+          2. Remaining references ranked by SJR (broader context)
         """
         latest_depth = state.current_depth - 1
         papers_per_level = state.papers_per_level or 3
@@ -824,36 +834,89 @@ class Orchestrator:
             state.pending_papers_at_depth = []
             return
 
-        # Fetch metadata for candidates and rank by SJR before selecting top-N.
-        # We fetch up to 2x papers_per_level to have a good pool for ranking,
-        # while not wasting too many API calls on papers we won't trace.
-        fetch_pool_size = min(len(all_new_refs), papers_per_level * 2)
+        # Collect inline citations from evaluated claims at the latest depth.
+        # These are the references explicitly attributed in the text (provenance chain).
+        cited_refs = set()
+        for result in state.tracing_results:
+            if result.depth == latest_depth:
+                for claim in result.claims:
+                    for cite in claim.inline_citations:
+                        cited_refs.add(cite.strip().lower())
+
+        # Fetch metadata for candidates — fetch more if we have cited refs to match
+        fetch_pool_size = min(len(all_new_refs), max(papers_per_level * 3, 10))
         candidates = []
         for ref_id in all_new_refs[:fetch_pool_size]:
             paper = self.retriever.fetch_paper_by_id(ref_id)
             if paper:
                 candidates.append(paper)
 
-        if candidates:
-            # Rank by SJR (same logic as retriever's _rank_by_sjr)
-            ranked = self.retriever._rank_by_sjr(candidates)
-            state.pending_papers_at_depth = [p.paper_id for p in ranked[:papers_per_level]]
-            # Cache the fetched metadata so _pop_next_paper doesn't re-fetch
-            if not hasattr(state, '_paper_cache'):
-                state._paper_cache = {}
-            for p in ranked[:papers_per_level]:
-                state._paper_cache[p.paper_id] = p
-        else:
+        if not candidates:
             state.pending_papers_at_depth = all_new_refs[:papers_per_level]
+            return
+
+        # Score candidates: prioritise those matching inline citations (provenance chain)
+        def _citation_priority(paper) -> float:
+            """
+            Returns a priority boost for papers that match inline citations.
+            Matching is fuzzy: checks if author surname + year appears in cited_refs,
+            or if the paper's DOI matches a cited DOI.
+            """
+            if not cited_refs:
+                return 0.0
+            # Check DOI match
+            if paper.doi and paper.doi.lower() in cited_refs:
+                return 10000.0
+            # Check author-year match (e.g., "smith, 2019", "smith et al., 2019")
+            if paper.authors and paper.year:
+                first_author = paper.authors[0].split()[-1].lower() if paper.authors[0] else ""
+                year_str = str(paper.year)
+                for cite in cited_refs:
+                    if first_author and first_author in cite and year_str in cite:
+                        return 10000.0
+            # Check title words in citations (some formats cite by title fragment)
+            if paper.title:
+                title_lower = paper.title.lower()
+                for cite in cited_refs:
+                    # If a citation string appears within the title or vice versa
+                    if len(cite) > 10 and cite in title_lower:
+                        return 5000.0
+            return 0.0
+
+        # Combined score: citation priority + SJR
+        def _combined_score(paper) -> float:
+            cite_boost = _citation_priority(paper)
+            sjr = (paper.sjr_score * 1000) if paper.sjr_score else float(paper.citation_count)
+            return cite_boost + sjr
+
+        ranked = sorted(candidates, key=_combined_score, reverse=True)
+
+        # Log how many candidates matched inline citations
+        cited_matches = sum(1 for p in ranked if _citation_priority(p) > 0)
+        if cited_matches:
+            logger.info(
+                "Provenance tracing: %d/%d candidates match inline citations from claims",
+                cited_matches, len(ranked)
+            )
+            self._progress(
+                f"Found {cited_matches} papers matching attributed references"
+            )
+
+        state.pending_papers_at_depth = [p.paper_id for p in ranked[:papers_per_level]]
+        # Cache the fetched metadata so _pop_next_paper doesn't re-fetch
+        if not hasattr(state, '_paper_cache'):
+            state._paper_cache = {}
+        for p in ranked[:papers_per_level]:
+            state._paper_cache[p.paper_id] = p
 
         self._progress(
             f"Advancing to depth {state.current_depth}: "
             f"{len(state.pending_papers_at_depth)} papers to trace"
         )
         logger.info(
-            "Populated depth %d queue: %d/%d new refs (papers_per_level=%d, ranked by SJR)",
+            "Populated depth %d queue: %d/%d new refs (papers_per_level=%d, %d cited matches)",
             state.current_depth, len(state.pending_papers_at_depth),
-            len(all_new_refs), papers_per_level
+            len(all_new_refs), papers_per_level, cited_matches
         )
 
     def _abstract_concept_for_depth(self, state: PipelineState, completed_depth: int) -> None:

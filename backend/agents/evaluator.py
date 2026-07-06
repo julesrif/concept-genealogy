@@ -201,6 +201,7 @@ class EvaluatorAgent:
                 depth=claim.depth,
                 validity_score=0.5,
                 relevant_concepts=[],
+                inline_citations=claim.inline_citations,
             )
 
         # At depth > 0, include both concepts in the prompt so the LLM evaluates
@@ -260,6 +261,7 @@ class EvaluatorAgent:
             depth=claim.depth,
             validity_score=validity_score,
             relevant_concepts=relevant_concepts,
+            inline_citations=claim.inline_citations,
             drift_score=drift_score,
             drift_analysis=drift_analysis,
         )

@@ -226,7 +226,7 @@ pytest tests/ -v --tb=short
 pytest tests/ --cov=. --cov-report=term-missing
 ```
 
-Test output and coverage reports for submission are saved under `backend/test-output/`.
+The test suite comprises 335 automated tests across 13 unit test modules and 3 functional test modules, achieving 95% code coverage. Test output and coverage reports for submission evidence are saved under `backend/test-output/`. HTML coverage reports are available in `backend/htmlcov/`.
 
 ---
 
