@@ -48,6 +48,12 @@
         </div>
       </div>
 
+      <!-- Genealogy Graph -->
+      <div v-if="graphData" class="card section">
+        <h3>🌳 Concept Genealogy Graph</h3>
+        <GenealogyGraph :graphData="graphData" />
+      </div>
+
       <!-- Tracing Results -->
       <div v-if="result.tracing_results?.length" class="card section">
         <h3>🔗 Citation Trace ({{ result.tracing_results.length }} levels)</h3>
@@ -98,17 +104,27 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getOutput } from '../api.js'
+import { getOutput, getGraph } from '../api.js'
+import GenealogyGraph from '../components/GenealogyGraph.vue'
 
 const props = defineProps({ filename: String })
 
 const result = ref(null)
+const graphData = ref(null)
 const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
   try {
     result.value = await getOutput(props.filename)
+    // Fetch graph data using the run_id from the saved output
+    if (result.value?.run_id) {
+      try {
+        graphData.value = await getGraph(result.value.run_id)
+      } catch {
+        // Graph may not be available for older runs — non-fatal
+      }
+    }
   } catch (e) {
     error.value = e.message
   } finally {
