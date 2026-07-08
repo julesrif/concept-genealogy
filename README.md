@@ -1,6 +1,7 @@
 # Concept Genealogy
 
 **Module:** Intelligent Agents
+
 **University of Essex Online**
 
 An LLM-powered multi-agent system for academic concept tracing and genealogy. The system takes a user-defined concept, identifies a highly cited "Gold Standard" seed paper, and recursively extracts and tracks its underlying claims backward through its citation chains. It builds an inverted semantic provenance graph that maps the genealogical evolution and conceptual drift of the idea across multiple levels of research, ensuring traceable outputs with a human kept in the loop at each key decision point.
@@ -183,7 +184,7 @@ Video recordings demonstrating the system's full functionality and HITL interact
 ### 1. Clone and configure
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/julesrif/concept-genealogy.git
 cd concept-genealogy
 cp backend/.env.example backend/.env
 # Edit backend/.env with your API keys
