@@ -13,6 +13,8 @@ This is the practical development deliverable for the *Intelligent Agents* modul
 
 It is realised as a **cooperating multi-agent system**, with agents taking on distinct responsibilities for planning, retrieval, extraction, evaluation, validation, synthesis and critique (see below).
 
+Academic-oly access to webapp: https://concept-genealogy.julioespinosa.com/
+
 ---
 
 ## Overview
