@@ -57,13 +57,14 @@ STRICT RULES:
   - these signal you are drawing on parametric knowledge rather than the provided claims.
 
 The claims below are organised by depth (0 = seed paper, 1 = direct references, 2+ = deeper sources).
+TEMPORAL DIRECTION: The seed paper (depth 0) is the MOST RECENT. Deeper depths are OLDER predecessors.
 Each paper is assigned a reference number [N] - use this number when citing claims from that paper.
 
 Write a coherent 4-6 paragraph academic synthesis that:
-1. Introduces the concept as defined in the seed paper claims (depth=0)
-2. Traces how the concept evolved in cited works (depth=1+)
-3. Identifies any conceptual drift visible in the claims
-4. Concludes with a summary grounded only in the provided evidence
+1. Introduces the concept as defined in the seed paper claims (depth=0) — this is the modern definition
+2. Traces the concept's historical roots in predecessor works (depth=1+), showing how earlier authors used or shaped the concept
+3. Identifies any conceptual drift visible between older usages and the modern seed paper definition
+4. Concludes with a summary of how the concept evolved FROM its historical origins TO the seed paper's current formulation
 
 Extracted claims (organised by depth):
 {claims_by_depth}

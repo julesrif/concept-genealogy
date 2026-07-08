@@ -27,8 +27,9 @@ Two-stage scoring:
 
 DRIFT DETECTION:
 At depth > 0, the Evaluator computes a semantic drift score by comparing the
-claim embedding to the parent paper's centroid embedding (stored in pgvector).
-High drift (score > 0.7) flags conceptual divergence from the root concept.
+claim embedding to the seed paper's centroid embedding (stored in pgvector).
+High drift (score > 0.7) flags that the older predecessor paper's usage of
+the concept diverges significantly from the seed paper's modern definition.
 Note: drift detection requires pgvector to be available; gracefully degrades
 to drift_score=None if vector storage is unavailable (MVP fallback).
 
@@ -67,17 +68,21 @@ JSON object only, no preamble:"""
 
 DRIFT_ANALYSIS_PROMPT = """You are analysing conceptual drift in a citation genealogy.
 
-The gold-standard definition of "{concept}" comes from the seed paper (depth 0).
-The following claim was extracted at depth {depth} (i.e., {depth} citation hops from the seed):
+TEMPORAL DIRECTION: The seed paper (depth 0) is the MOST RECENT paper. Deeper depths
+are OLDER predecessor papers that the seed cites. We are tracing the concept BACKWARDS
+through time: depth 0 (newest) → depth 1 (older) → depth 2+ (oldest).
+
+The modern definition of "{concept}" comes from the seed paper (depth 0).
+The following claim was extracted at depth {depth} (i.e., {depth} citation hops back in time):
 
 Claim: "{claim}"
 Source paper: "{source_title}"
 
-Compare how this claim uses the concept relative to the seed paper's definition.
+Compare how this OLDER paper used the concept relative to the seed paper's modern definition.
 Respond with a JSON object with exactly three fields:
-  - "historical_use": one sentence describing how the seed paper originally defined/used the concept
-  - "current_use": one sentence describing how THIS claim redefines or applies the concept
-  - "evolutionary_path": one sentence explaining the step-by-step transformation from seed usage to current usage through the citation chain
+  - "historical_use": one sentence describing how THIS predecessor paper (depth {depth}) used the concept historically
+  - "current_use": one sentence describing how the seed paper (depth 0) defines/uses the concept today
+  - "evolutionary_path": one sentence explaining how the concept evolved FROM this older usage TO the seed paper's modern definition through the citation chain
 
 JSON object only, no preamble:"""
 

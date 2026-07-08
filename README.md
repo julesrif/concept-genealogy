@@ -159,6 +159,17 @@ All external libraries, frameworks, and models used in this project are acknowle
 
 ---
 
+## System Demonstration
+
+Video recordings demonstrating the system's full functionality and HITL interactions:
+
+| Demo | Description | Link |
+|------|-------------|------|
+| **Search by DOI** | Pipeline execution using a specific paper DOI as input, showing seed validation, citation tracing, synthesis, and adversarial challenge | [YouTube](https://www.youtube.com/watch?v=oNjxMHc6E-s) |
+| **Search by Concept** | Pipeline execution from a concept keyword, showing candidate retrieval, seed selection via HITL Gate 1, recursive tracing, and final output | [YouTube](https://www.youtube.com/watch?v=noT3sM0fbfc) |
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -180,13 +191,19 @@ cp backend/.env.example backend/.env
 
 Required environment variables:
 
-| Variable | Description |
-|----------|-------------|
-| `GROQ_API_KEY` | Groq API key (required) |
-| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar API key (optional, raises rate limits) |
-| `ELSEVIER_API_KEY` | Elsevier API key (optional, enables non-OA full-text retrieval) |
-| `MAX_DEPTH` | Citation tracing depth (default: 3) |
-| `MAX_CANDIDATES` | Seed paper candidates presented to user (default: 3) |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GROQ_API_KEY` | Groq API key ([console.groq.com](https://console.groq.com)) | Yes |
+| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar API key (raises rate limits from 1 to 10 req/s) | No |
+| `ELSEVIER_API_KEY` | Elsevier API key for non-OA full-text retrieval ([dev.elsevier.com](https://dev.elsevier.com/)) | No |
+| `MAX_DEPTH` | Citation tracing depth (default: 3) | No |
+| `MAX_CANDIDATES` | Seed paper candidates presented to user (default: 3) | No |
+| `GROQ_MODEL_REASONING` | Model for synthesis/challenge tasks (default: `llama-3.3-70b-versatile`) | No |
+| `GROQ_MODEL_FAST` | Model for extraction/evaluation tasks (default: `llama-3.1-8b-instant`) | No |
+| `SJR_CSV_PATH` | Path to local SJR dataset CSV (default: `data/scimagojr2025.csv`) | No |
+| `DATABASE_URL` | PostgreSQL connection string (default: `postgresql://postgres:postgres@localhost:5432/concept_genealogy`) | No |
+| `LOG_LEVEL` | Logging verbosity (default: `INFO`) | No |
+| `OUTPUT_DIR` | Directory for pipeline output files (default: `output`) | No |
 
 ### 2. Start the database
 
@@ -232,13 +249,39 @@ The test suite comprises 335 automated tests across 13 unit test modules and 3 f
 
 ---
 
+## Use of Generative AI - Acknowledgement
+
+In accordance with the University of Essex Online guidelines on academic integrity and the transparent use of generative AI tools in assessed work, the following declaration is made:
+
+**Tool:** Claude Opus 4 (Anthropic, https://www.anthropic.com/claude)
+
+**Context of use:** Claude Opus 4 was used as a supporting development agent during the implementation phase of this project. Its role was limited to code generation assistance, refactoring suggestions, and drafting documentation. The tool was used interactively through an IDE integration (GitHub Copilot with Claude Opus 4 model).
+
+**Author responsibility:** All architectural decisions, design choices, implementation strategies, testing approaches, academic rationale, and critical evaluations presented in this submission are solely the intellectual work of the author. Every output produced by the AI tool was critically reviewed, validated, and where necessary revised or rejected by the author before incorporation. The author retains full responsibility for the correctness, originality, and academic integrity of the submitted work.
+
+**Scope of AI assistance:**
+- Code scaffolding and boilerplate generation
+- Syntax and debugging assistance
+- Documentation drafting and formatting
+- Test case generation (subsequently reviewed and validated by the author)
+
+**Not AI-generated:** The system architecture, agent design, HITL gate placement rationale, model selection strategy, academic justifications, and all critical design decisions documented in the inline commentary are the author's original intellectual contributions, informed by the referenced academic literature.
+
+This acknowledgement follows the guidance of Hosseini, Resnik and Holmes (2023) and UCL Library Services (2023) on the ethical disclosure of AI tool usage in scholarly work.
+
+---
+
 ## References
 
 - AI2 (2023) Semantic Scholar API License Agreement. Available at: https://www.semanticscholar.org/product/api/license (Accessed: 27 June 2026).
-- Artifex Software, Inc. (2026) PyMuPDF. Available at: https://github.com/pymupdf/PyMuPDF (Accessed: 27 June 2026).
+- Anthropic (2025) Claude. Available at: https://www.anthropic.com/claude (Accessed: 8 July 2026).
+- Artifex Software, Inc. (2026) PyMuPDF. Available at: https://github.com/pymupdf/PyMuPDF (Accessed: 8 July 2026).
+- Elsevier Developer Portal (n.d.) *Article Retrieval API*. Available at: https://dev.elsevier.com/ (Accessed: 8 July 2026).
 - Atıl, B., et al. (2025) Non-determinism of "deterministic" LLM system settings in hosted environments. *Proceedings of the 5th Workshop on Evaluation and Comparison of NLP Systems*, pp. 135-148. doi:10.18653/v1/2025.eval4nlp-1.12.
-- Groq (2025) Rate limits. Available at: https://console.groq.com/docs/rate-limits (Accessed: 27 June 2026).
-- pgvector (2021) pgvector: open-source vector similarity search for PostgreSQL. Available at: https://github.com/pgvector/pgvector (Accessed: 27 June 2026).
-- Reimers, N. & Gurevych, I. (2019) Sentence-BERT. *EMNLP 2019*, 3982-3992.
+- Groq (2025) Rate limits. Available at: https://console.groq.com/docs/rate-limits (Accessed: 8 July 2026).
+- Hosseini, M., Resnik, D.B. and Holmes, K. (2023) 'The ethics of disclosing the use of artificial intelligence tools in writing scholarly manuscripts', *Research Ethics*, 19(4), pp. 449-465. doi:10.1177/17470161231180449.
+- pgvector (2021) pgvector: open-source vector similarity search for PostgreSQL. Available at: https://github.com/pgvector/pgvector (Accessed: 8 July 2026).
+- Reimers, N. and Gurevych, I. (2019) Sentence-BERT. *EMNLP 2019*, 3982-3992.
 - Sapkota, R. et al. (2025) LangChain vs. LangGraph vs. LangSmith. *TechRxiv*. doi:10.36227/techrxiv.175695645.52670060/v1.
-- SCImago Journal & Country Rank (n.d.) Available at: https://www.scimagojr.com/journalrank.php (Accessed: 27 June 2026).
+- SCImago Journal & Country Rank (n.d.) Available at: https://www.scimagojr.com/journalrank.php (Accessed: 8 July 2026).
+- UCL Library Services (2023) *Acknowledging the use of generative AI and referencing generative AI*. Available at: https://library-guides.ucl.ac.uk/referencing-plagiarism/acknowledging-genAI (Accessed: 8 July 2026).

@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: concept_genealogy
     ports:
-      - "5432:5432"
+      - "5429:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -32,7 +32,7 @@ services:
     container_name: concept_genealogy_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "7999:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/concept_genealogy
     env_file:

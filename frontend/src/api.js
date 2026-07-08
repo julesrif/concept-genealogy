@@ -1,3 +1,14 @@
+/**
+ * api.js - REST client for the Concept Genealogy backend.
+ *
+ * Design decision: thin wrapper using native fetch() rather than axios/ky because
+ * the API surface is small (6 endpoints) and all responses are JSON. Adding a
+ * library dependency for fetch ergonomics is not justified at this scale.
+ *
+ * The API_BASE uses a relative path ('/api') which is proxied to the backend by
+ * Vite's dev server (vite.config.js proxy) in development and by nginx in
+ * production (nginx.conf reverse proxy). This avoids CORS configuration entirely.
+ */
 const API_BASE = '/api'
 
 export async function startRun(concept, { depth = null, papersPerLevel = null, doi = null } = {}) {
